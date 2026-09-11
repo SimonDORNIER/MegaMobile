@@ -1,6 +1,8 @@
 {
   "versionCode": 5,
   "versionName": "0.4.0",
-  "apkUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/MegaMobile-latest.apk",
-  "sha256": ""
+  "apkUrl": "",
+  "apkParts": [],
+  "sha256": "aff43210489cadc97b6d08a4d940b3bcd49f9218d9d5b360c6642cb96b425355",
+  "note": "V0.4.0 est la base du nouveau système. Les prochaines APK pourront être téléchargées automatiquement en morceaux signés depuis GitHub."
 }
