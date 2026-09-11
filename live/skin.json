@@ -1,0 +1,13 @@
+{
+  "skinVersion": "1.0.0",
+  "assetsBase": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/assets/",
+  "player": "player.png",
+  "grunt": "grunt.png",
+  "fast": "fast.png",
+  "tank": "tank.png",
+  "shooter": "shooter.png",
+  "boss": "boss.png",
+  "chest": "chest.png",
+  "gem": "gem.png",
+  "rocket": "rocket.png"
+}
