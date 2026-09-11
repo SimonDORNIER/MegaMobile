@@ -1,0 +1,7 @@
+{
+  "contentVersion": "0.3.0-live.1",
+  "engineVersion": 3,
+  "orientation": "portrait",
+  "configUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/config.json",
+  "message": "Première base native portrait : hordes, XP, niveaux, raretés, aura, orbitales, foudre, roquettes, boss, coffres et dash."
+}
