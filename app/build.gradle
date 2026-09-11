@@ -1,9 +1,32 @@
 plugins { id 'com.android.application' }
+
 android {
     namespace 'com.megamobile.game'
     compileSdk 35
-    defaultConfig { applicationId 'com.megamobile.game'; minSdk 26; targetSdk 35; versionCode 5; versionName '0.4.0' }
-    buildTypes { release { minifyEnabled false }; debug { debuggable true } }
-    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+
+    defaultConfig {
+        applicationId 'com.megamobile.game'
+        minSdk 26
+        targetSdk 29
+        versionCode 5
+        versionName '0.4.0'
+    }
+
+    buildTypes {
+        release { minifyEnabled false }
+        debug { debuggable true }
+    }
+
+    lint {
+        disable 'ExpiredTargetSdkVersion'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 }
-dependencies { implementation 'androidx.core:core:1.13.1' }
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+}
