@@ -1,9 +1,9 @@
 {
-  "contentVersion": "0.4.0-live.1",
-  "engineVersion": 5,
+  "contentVersion": "0.5.0-live.1",
+  "engineVersion": 6,
   "orientation": "portrait",
   "configUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/config.json",
   "skinUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/skin.json",
   "appManifestUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/app.json",
-  "message": "Version présentable : joystick partout, sprites distants, équilibrage live et mise à jour APK assistée."
+  "message": "V0.5 présentable : menu, record, joystick global, visuels live, pickups aimant/nuke/soin/ULTRA, vitesses x1/x2/x4/x10/x100 et mise à jour moteur assistée."
 }
