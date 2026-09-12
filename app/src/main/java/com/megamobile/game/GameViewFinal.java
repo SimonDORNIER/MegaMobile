@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Couche de finition au-dessus du moteur : écran d'accueil, record local,
+ * Couche "jeu présentable" au-dessus du moteur : écran d'accueil, record local,
  * pickups spéciaux et petites finitions. Le gameplay principal reste dans GameView.
  */
 public class GameViewFinal extends GameViewPro {
@@ -25,12 +25,14 @@ public class GameViewFinal extends GameViewPro {
     private static final int PICKUP_MAGNET = 0;
     private static final int PICKUP_NUKE = 1;
     private static final int PICKUP_HEAL = 2;
+    private static final int PICKUP_ULTRA = 3;
 
     private final Paint ui = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Random random = new Random();
     private final ArrayList<SpecialPickup> pickups = new ArrayList<>();
     private final RectF playRect = new RectF();
+    private final RectF speedRect = new RectF();
     private final SharedPreferences prefs;
 
     private boolean inMenu = true;
@@ -38,10 +40,12 @@ public class GameViewFinal extends GameViewPro {
     private float pickupTimer = 22f;
     private long lastExtraMs;
     private boolean deathStored;
+    private final int[] speedModes = {1, 2, 4, 10, 100};
+    private int speedModeIndex = 0;
 
     private Field fPaused, fDead, fChoosing, fPx, fPy, fCamX, fCamY, fElapsed;
-    private Field fEnemies, fGems, fKills, fScore, fHp, fMaxHp;
-    private Method mShowBanner, mGainXp;
+    private Field fEnemies, fGems, fKills, fScore, fHp, fMaxHp, fDamage, fFireInterval, fSpeed, fCrit;
+    private Method mShowBanner, mGainXp, mUpdate, mUpdateVisuals;
     private Class<?> gemClass;
     private Field gemX, gemY;
 
@@ -73,10 +77,18 @@ public class GameViewFinal extends GameViewPro {
             fScore = baseField("score");
             fHp = baseField("hp");
             fMaxHp = baseField("maxHp");
+            fDamage = baseField("damage");
+            fFireInterval = baseField("fireInterval");
+            fSpeed = baseField("speed");
+            fCrit = baseField("crit");
             mShowBanner = GameView.class.getDeclaredMethod("showBanner", String.class);
             mShowBanner.setAccessible(true);
             mGainXp = GameView.class.getDeclaredMethod("gainXp", float.class);
             mGainXp.setAccessible(true);
+            mUpdate = GameView.class.getDeclaredMethod("update", float.class);
+            mUpdate.setAccessible(true);
+            mUpdateVisuals = GameView.class.getDeclaredMethod("updateVisuals", float.class);
+            mUpdateVisuals.setAccessible(true);
         } catch (Exception ignored) { }
     }
 
@@ -112,7 +124,27 @@ public class GameViewFinal extends GameViewPro {
         long now = SystemClock.uptimeMillis();
         float dt = Math.min(0.08f, Math.max(0f, (now - lastExtraMs) / 1000f));
         lastExtraMs = now;
-        if (!inMenu) updateFinalLayer(dt);
+        if (!inMenu) {
+            updateFinalLayer(dt);
+            runExtraSimulation(dt);
+        }
+    }
+
+    private void runExtraSimulation(float realDt) {
+        int multiplier = speedModes[speedModeIndex];
+        if (multiplier <= 1 || realDt <= 0f || bool(fPaused) || bool(fDead) || bool(fChoosing)) return;
+        if (mUpdate == null || mUpdateVisuals == null) return;
+        float extra = realDt * (multiplier - 1f);
+        int steps = Math.min(12, Math.max(1, (int) Math.ceil(extra / 0.04f)));
+        float step = extra / steps;
+        try {
+            for (int i = 0; i < steps; i++) {
+                if (bool(fDead) || bool(fPaused) || bool(fChoosing)) break;
+                mUpdate.invoke(this, step);
+                mUpdateVisuals.invoke(this, step);
+            }
+            invalidate();
+        } catch (Exception ignored) { }
     }
 
     private void updateFinalLayer(float dt) {
@@ -157,7 +189,8 @@ public class GameViewFinal extends GameViewPro {
         float d = 250f + random.nextFloat() * 300f;
         int type;
         float r = random.nextFloat();
-        if (r < 0.43f) type = PICKUP_MAGNET;
+        if (r < 0.025f) type = PICKUP_ULTRA;
+        else if (r < 0.43f) type = PICKUP_MAGNET;
         else if (r < 0.76f) type = PICKUP_NUKE;
         else type = PICKUP_HEAL;
         pickups.add(new SpecialPickup(type,
@@ -188,6 +221,16 @@ public class GameViewFinal extends GameViewPro {
                 if (fScore != null) fScore.setInt(this, integer(fScore) + count * 12);
                 if (mGainXp != null && count > 0) mGainXp.invoke(this, Math.min(55f, count * 0.55f));
                 banner("NUKE ! " + count + " ennemis");
+            } else if (type == PICKUP_ULTRA) {
+                if (fDamage != null) fDamage.setFloat(this, number(fDamage) * 1.22f);
+                if (fFireInterval != null) fFireInterval.setFloat(this, Math.max(0.08f, number(fFireInterval) / 1.14f));
+                if (fSpeed != null) fSpeed.setFloat(this, number(fSpeed) * 1.08f);
+                if (fCrit != null) fCrit.setFloat(this, Math.min(0.85f, number(fCrit) + 0.08f));
+                float oldMax = number(fMaxHp);
+                if (fMaxHp != null) fMaxHp.setFloat(this, oldMax + 18f);
+                if (fHp != null) fHp.setFloat(this, Math.min(oldMax + 18f, number(fHp) + 28f));
+                if (fScore != null) fScore.setInt(this, integer(fScore) + 750);
+                banner("ULTRA CORE !");
             } else {
                 float maxHp = number(fMaxHp);
                 float hp = number(fHp);
@@ -215,7 +258,10 @@ public class GameViewFinal extends GameViewPro {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (!inMenu && !bool(fDead)) drawPickups(canvas);
-        if (!inMenu && !bool(fDead) && !bool(fChoosing)) drawBestScore(canvas);
+        if (!inMenu && !bool(fDead) && !bool(fChoosing)) {
+            drawBestScore(canvas);
+            drawSpeedControl(canvas);
+        }
         if (inMenu) drawMainMenu(canvas);
     }
 
@@ -229,13 +275,14 @@ public class GameViewFinal extends GameViewPro {
             float pulse = 1f + (float) Math.sin(t * 5.5f + p.x * 0.01f) * 0.08f;
             int color = p.type == PICKUP_MAGNET ? Color.rgb(80, 210, 255)
                     : p.type == PICKUP_NUKE ? Color.rgb(255, 105, 65)
+                    : p.type == PICKUP_ULTRA ? Color.rgb(245, 90, 255)
                     : Color.rgb(95, 235, 130);
             ui.setColor(Color.argb(50, Color.red(color), Color.green(color), Color.blue(color)));
             canvas.drawCircle(sx, sy, 42f * pulse, ui);
             stroke.setColor(color); stroke.setStrokeWidth(4f);
             canvas.drawCircle(sx, sy, 25f * pulse, stroke);
             ui.setColor(color); ui.setTextAlign(Paint.Align.CENTER); ui.setFakeBoldText(true); ui.setTextSize(17f);
-            canvas.drawText(p.type == PICKUP_MAGNET ? "M" : p.type == PICKUP_NUKE ? "N" : "+", sx, sy + 6f, ui);
+            canvas.drawText(p.type == PICKUP_MAGNET ? "M" : p.type == PICKUP_NUKE ? "N" : p.type == PICKUP_ULTRA ? "U" : "+", sx, sy + 6f, ui);
             ui.setFakeBoldText(false);
         }
     }
@@ -245,6 +292,24 @@ public class GameViewFinal extends GameViewPro {
         ui.setTextSize(12f);
         ui.setColor(Color.argb(150, 215, 230, 232));
         canvas.drawText("RECORD " + bestScore, getWidth() - 20f, 185f, ui);
+    }
+
+    private void drawSpeedControl(Canvas canvas) {
+        float w = 84f, h = 36f;
+        float left = getWidth() - w - 18f;
+        float top = 205f;
+        speedRect.set(left, top, left + w, top + h);
+        ui.setColor(Color.argb(170, 24, 35, 40));
+        canvas.drawRoundRect(speedRect, 12f, 12f, ui);
+        stroke.setColor(Color.argb(150, 120, 225, 240));
+        stroke.setStrokeWidth(2f);
+        canvas.drawRoundRect(speedRect, 12f, 12f, stroke);
+        ui.setTextAlign(Paint.Align.CENTER);
+        ui.setFakeBoldText(true);
+        ui.setTextSize(14f);
+        ui.setColor(Color.WHITE);
+        canvas.drawText("×" + speedModes[speedModeIndex], speedRect.centerX(), speedRect.centerY() + 5f, ui);
+        ui.setFakeBoldText(false);
     }
 
     private void drawMainMenu(Canvas c) {
@@ -302,6 +367,12 @@ public class GameViewFinal extends GameViewPro {
                     invalidate();
                 }
             }
+            return true;
+        }
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && speedRect.contains(event.getX(), event.getY())) {
+            speedModeIndex = (speedModeIndex + 1) % speedModes.length;
+            banner("VITESSE ×" + speedModes[speedModeIndex]);
+            invalidate();
             return true;
         }
         return super.onTouchEvent(event);
