@@ -1,8 +1,8 @@
 {
-  "versionCode": 5,
-  "versionName": "0.4.0",
+  "versionCode": 6,
+  "versionName": "0.5.0",
   "apkUrl": "",
   "apkParts": [],
-  "sha256": "aff43210489cadc97b6d08a4d940b3bcd49f9218d9d5b360c6642cb96b425355",
-  "note": "V0.4.0 est la base du nouveau système. Les prochaines APK pourront être téléchargées automatiquement en morceaux signés depuis GitHub."
+  "sha256": "19a77cb1f999cacf0b222396462a1e3964ab05dd7086af77e1bef754482409ff",
+  "note": "V0.5.0 est la version de base présentable. Elle vérifie automatiquement le contenu live et prépare les prochaines mises à jour moteur assistées."
 }
