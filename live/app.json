@@ -1,8 +1,10 @@
 {
-  "versionCode": 6,
-  "versionName": "0.5.0",
+  "versionCode": 7,
+  "versionName": "0.6.0",
   "apkUrl": "",
-  "apkParts": [],
-  "sha256": "136bcbaad5d047a64b5bdbabde7eddf1b416841051f54fb81b10b017b07e2b09",
-  "note": "V0.5.0 est la version de base présentable. Installe-la une fois manuellement ; elle vérifie ensuite automatiquement le contenu live et les futures mises à jour moteur publiées sur GitHub."
+  "apkParts": [
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.part01.b64"
+  ],
+  "sha256": "616d7b4c50a44e3af5ce2b4d95e1579fdd2e7d2c7b22925990bd041e80785353",
+  "note": "V0.6.0 ajoute des événements de partie, des reliques rares, des retours haptiques/sonores, des statistiques persistantes et un système de mise à jour moteur plus léger."
 }
