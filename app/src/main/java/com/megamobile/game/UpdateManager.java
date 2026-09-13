@@ -9,8 +9,6 @@ import android.provider.Settings;
 import android.util.Base64;
 import android.widget.Toast;
 
-import androidx.core.content.FileProvider;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -86,7 +84,7 @@ public final class UpdateManager {
                         .apply();
                 activity.runOnUiThread(() -> requestInstall(activity, apk, remoteName));
             } catch (Exception ignored) {
-                // Hors ligne ou GitHub indisponible : le jeu démarre normalement avec le contenu en cache.
+                // Offline or GitHub unavailable: the installed game remains fully playable.
             } finally {
                 checking = false;
             }
@@ -140,8 +138,11 @@ public final class UpdateManager {
                 return;
             }
 
-            Uri uri = FileProvider.getUriForFile(activity,
-                    activity.getPackageName() + ".updates", apk);
+            Uri uri = new Uri.Builder()
+                    .scheme("content")
+                    .authority(activity.getPackageName() + ".updates")
+                    .appendPath(apk.getName())
+                    .build();
             Intent install = new Intent(Intent.ACTION_VIEW);
             install.setDataAndType(uri, "application/vnd.android.package-archive");
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
