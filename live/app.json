@@ -3,8 +3,17 @@
   "versionName": "0.6.0",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.part01.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p01a.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p01b.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p02.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p03.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p04a.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p04b.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p05.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p06.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p07a.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p07b.b64"
   ],
   "sha256": "616d7b4c50a44e3af5ce2b4d95e1579fdd2e7d2c7b22925990bd041e80785353",
-  "note": "V0.6.0 ajoute des événements de partie, des reliques rares, des retours haptiques/sonores, des statistiques persistantes et un système de mise à jour moteur plus léger."
+  "note": "Canal V0.6.0 réparé : APK complet distribué en plusieurs morceaux, vérifié par SHA-256 avant installation."
 }
