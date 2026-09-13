@@ -1,11 +1,11 @@
 {
-  "contentVersion": "0.5.0-live.1",
+  "contentVersion": "0.6.0-live.1",
   "playerBaseSpeed": 305.0,
-  "spawnInterval": 0.54,
-  "difficultySeconds": 66.0,
-  "enemyCap": 220,
-  "bossInterval": 46.0,
-  "xpMagnet": 190.0,
-  "dashCooldown": 2.4,
-  "dashDistance": 250.0
+  "spawnInterval": 0.50,
+  "difficultySeconds": 64.0,
+  "enemyCap": 240,
+  "bossInterval": 44.0,
+  "xpMagnet": 195.0,
+  "dashCooldown": 2.35,
+  "dashDistance": 255.0
 }
