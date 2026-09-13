@@ -1,19 +1,16 @@
 {
-  "versionCode": 7,
-  "versionName": "0.6.0",
+  "versionCode": 8,
+  "versionName": "0.7.0",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p01a.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p01b.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p02.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p03.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p04a.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p04b.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p05.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p06.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p07a.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.6.0.p07b.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p01.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p02.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p03.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p04.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p05.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p06.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p07.b64"
   ],
-  "sha256": "616d7b4c50a44e3af5ce2b4d95e1579fdd2e7d2c7b22925990bd041e80785353",
-  "note": "Canal V0.6.0 réparé : APK complet distribué en plusieurs morceaux, vérifié par SHA-256 avant installation."
+  "sha256": "9c800793a17e8586c7a7a61fd3053f65beab3220864619bbe3ed0986cc16ffdb",
+  "note": "V0.7.0 : élites Rage/Titan/Phase, boss enragés à mi-vie, combos et récompenses, actes progressifs, frappes orbitales, balises à capturer et pression de horde renforcée."
 }
