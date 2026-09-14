@@ -1,6 +1,7 @@
 package com.megamobile.game;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.net.Uri;
@@ -36,6 +37,7 @@ public final class UpdateManager {
         if (checking || activity == null) return;
         checking = true;
         Thread thread = new Thread(() -> {
+            boolean foundUpdate = false;
             try {
                 int currentCode = localVersionCode(activity);
                 JSONObject manifest = new JSONObject(downloadText(
@@ -45,36 +47,37 @@ public final class UpdateManager {
                     clearPendingIfInstalled(activity, currentCode);
                     return;
                 }
+                foundUpdate = true;
 
                 String remoteName = manifest.optString("versionName", String.valueOf(remoteCode));
                 String apkUrl = manifest.optString("apkUrl", "").trim();
                 String sha256 = manifest.optString("sha256", "").trim();
                 JSONArray apkParts = manifest.optJSONArray("apkParts");
                 boolean hasParts = apkParts != null && apkParts.length() > 0;
-                if (!hasParts && apkUrl.isEmpty()) return;
+                if (!hasParts && apkUrl.isEmpty()) throw new IllegalStateException("aucune source APK");
 
                 File root = activity.getExternalFilesDir(null);
-                if (root == null) return;
+                if (root == null) throw new IllegalStateException("stockage indisponible");
                 File dir = new File(root, "updates");
-                if (!dir.exists() && !dir.mkdirs()) return;
+                if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("dossier update indisponible");
                 File apk = new File(dir, "MegaMobile-" + safe(remoteName) + ".apk");
 
                 boolean ready = apk.exists() && apk.length() > 1024;
-                if (ready && !sha256.isEmpty()) {
-                    ready = sha256.equalsIgnoreCase(fileSha256(apk));
-                }
+                if (ready && !sha256.isEmpty()) ready = sha256.equalsIgnoreCase(fileSha256(apk));
 
                 if (!ready) {
-                    activity.runOnUiThread(() -> Toast.makeText(activity,
-                            "Nouvelle version MegaMobile : téléchargement automatique…",
-                            Toast.LENGTH_SHORT).show());
+                    activity.runOnUiThread(() -> toast(activity,
+                            "Mise à jour détectée — téléchargement…", Toast.LENGTH_SHORT));
                     if (hasParts) downloadBase64Parts(apkParts, apk);
                     else downloadToFile(apkUrl, apk);
                 }
 
+                activity.runOnUiThread(() -> toast(activity,
+                        "Téléchargement terminé — vérification…", Toast.LENGTH_SHORT));
+
                 if (!sha256.isEmpty() && !sha256.equalsIgnoreCase(fileSha256(apk))) {
                     apk.delete();
-                    return;
+                    throw new IllegalStateException("contrôle de sécurité invalide");
                 }
 
                 activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE).edit()
@@ -82,9 +85,17 @@ public final class UpdateManager {
                         .putString(PENDING_NAME, remoteName)
                         .putInt(PENDING_CODE, remoteCode)
                         .apply();
-                activity.runOnUiThread(() -> requestInstall(activity, apk, remoteName));
-            } catch (Exception ignored) {
-                // Offline or GitHub unavailable: the installed game remains fully playable.
+
+                activity.runOnUiThread(() -> {
+                    toast(activity, "Mise à jour vérifiée — ouverture de l'installation…", Toast.LENGTH_LONG);
+                    requestInstall(activity, apk, remoteName);
+                });
+            } catch (Exception e) {
+                if (foundUpdate) {
+                    final String reason = e.getMessage() == null ? "erreur inconnue" : e.getMessage();
+                    activity.runOnUiThread(() -> toast(activity,
+                            "Échec de la mise à jour : " + reason, Toast.LENGTH_LONG));
+                }
             } finally {
                 checking = false;
             }
@@ -114,10 +125,7 @@ public final class UpdateManager {
 
         String name = activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
                 .getString(PENDING_NAME, "nouvelle version");
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O
-                || activity.getPackageManager().canRequestPackageInstalls()) {
-            requestInstall(activity, apk, name);
-        }
+        requestInstall(activity, apk, name);
     }
 
     private static void clearPendingIfInstalled(Activity activity, int currentCode) {
@@ -130,11 +138,12 @@ public final class UpdateManager {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     && !activity.getPackageManager().canRequestPackageInstalls()) {
-                Toast.makeText(activity,
-                        "Pour les futures mises à jour, autorise MegaMobile à installer des applis depuis cette source.",
-                        Toast.LENGTH_LONG).show();
-                activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + activity.getPackageName())));
+                toast(activity,
+                        "Autorise MegaMobile à installer ses mises à jour, puis reviens au jeu.",
+                        Toast.LENGTH_LONG);
+                Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + activity.getPackageName()));
+                activity.startActivity(settings);
                 return;
             }
 
@@ -143,14 +152,34 @@ public final class UpdateManager {
                     .authority(activity.getPackageName() + ".updates")
                     .appendPath(apk.getName())
                     .build();
-            Intent install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(uri, "application/vnd.android.package-archive");
+
+            Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            install.setData(uri);
+            install.setClipData(ClipData.newRawUri("MegaMobile update", uri));
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            Toast.makeText(activity,
-                    "MegaMobile " + versionName + " téléchargée — confirme la mise à jour Android.",
-                    Toast.LENGTH_LONG).show();
+
+            if (install.resolveActivity(activity.getPackageManager()) == null) {
+                install = new Intent(Intent.ACTION_VIEW);
+                install.setDataAndType(uri, "application/vnd.android.package-archive");
+                install.setClipData(ClipData.newRawUri("MegaMobile update", uri));
+                install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
+
+            toast(activity,
+                    "MegaMobile " + versionName + " prête — confirme la mise à jour Android.",
+                    Toast.LENGTH_LONG);
             activity.startActivity(install);
-        } catch (Exception ignored) { }
+        } catch (Exception e) {
+            toast(activity,
+                    "Impossible d'ouvrir l'installation Android : "
+                            + (e.getMessage() == null ? "réessaie depuis le jeu" : e.getMessage()),
+                    Toast.LENGTH_LONG);
+        }
+    }
+
+    private static void toast(Activity activity, String text, int length) {
+        try { Toast.makeText(activity, text, length).show(); }
+        catch (Exception ignored) { }
     }
 
     public static void clearPending(Activity activity) {
@@ -210,9 +239,7 @@ public final class UpdateManager {
                  ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                 byte[] buffer = new byte[16384];
                 int n;
-                while ((n = in.read(buffer)) >= 0) {
-                    if (n > 0) out.write(buffer, 0, n);
-                }
+                while ((n = in.read(buffer)) >= 0) if (n > 0) out.write(buffer, 0, n);
                 return out.toByteArray();
             }
         } finally {
@@ -233,9 +260,7 @@ public final class UpdateManager {
                  FileOutputStream out = new FileOutputStream(temp)) {
                 byte[] buffer = new byte[32768];
                 int n;
-                while ((n = in.read(buffer)) >= 0) {
-                    if (n > 0) out.write(buffer, 0, n);
-                }
+                while ((n = in.read(buffer)) >= 0) if (n > 0) out.write(buffer, 0, n);
                 out.flush();
             }
             replaceFile(temp, target);
@@ -252,9 +277,7 @@ public final class UpdateManager {
              FileOutputStream out = new FileOutputStream(target)) {
             byte[] buffer = new byte[32768];
             int n;
-            while ((n = in.read(buffer)) >= 0) {
-                if (n > 0) out.write(buffer, 0, n);
-            }
+            while ((n = in.read(buffer)) >= 0) if (n > 0) out.write(buffer, 0, n);
             out.flush();
         }
         temp.delete();
@@ -265,9 +288,7 @@ public final class UpdateManager {
         try (FileInputStream in = new FileInputStream(file)) {
             byte[] buffer = new byte[32768];
             int n;
-            while ((n = in.read(buffer)) >= 0) {
-                if (n > 0) digest.update(buffer, 0, n);
-            }
+            while ((n = in.read(buffer)) >= 0) if (n > 0) digest.update(buffer, 0, n);
         }
         StringBuilder result = new StringBuilder();
         for (byte b : digest.digest()) result.append(String.format("%02x", b & 255));
