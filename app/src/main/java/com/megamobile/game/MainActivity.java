@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         immersive();
-        gameView = new GameViewV7Final(this);
+        gameView = new GameViewV71(this);
         setContentView(gameView);
         UpdateManager.checkAndUpdate(this);
     }
@@ -37,9 +37,6 @@ public class MainActivity extends Activity {
         super.onResume();
         immersive();
         if (gameView != null) gameView.resumeGame();
-
-        // Returning from the Android "install unknown apps" screen can race the permission state.
-        // Retry shortly after resume, then check the live channel.
         getWindow().getDecorView().postDelayed(() -> {
             UpdateManager.tryInstallPending(this);
             UpdateManager.checkAndUpdate(this);
