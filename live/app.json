@@ -1,16 +1,8 @@
 {
-  "versionCode": 8,
-  "versionName": "0.7.0",
-  "apkUrl": "",
-  "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p01.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p02.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p03.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p04.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p05.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p06.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.0.p07.b64"
-  ],
-  "sha256": "9c800793a17e8586c7a7a61fd3053f65beab3220864619bbe3ed0986cc16ffdb",
-  "note": "V0.7.0 : élites Rage/Titan/Phase, boss enragés à mi-vie, combos et récompenses, actes progressifs, frappes orbitales, balises à capturer et pression de horde renforcée."
+  "versionCode": 9,
+  "versionName": "0.7.1",
+  "apkUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/MegaMobile-v0.7.1.apk",
+  "apkParts": [],
+  "sha256": "04faad13513a3e46e41216787b438555248a907e03e359c6f9988026f79f4fc2",
+  "note": "V0.7.1 : version installée clairement affichée, updater Android renforcé et APK distribué directement pour fiabiliser les mises à jour automatiques."
 }
