@@ -36,9 +36,14 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         immersive();
-        UpdateManager.tryInstallPending(this);
-        UpdateManager.checkAndUpdate(this);
         if (gameView != null) gameView.resumeGame();
+
+        // Returning from the Android "install unknown apps" screen can race the permission state.
+        // Retry shortly after resume, then check the live channel.
+        getWindow().getDecorView().postDelayed(() -> {
+            UpdateManager.tryInstallPending(this);
+            UpdateManager.checkAndUpdate(this);
+        }, 650L);
     }
 
     @Override
