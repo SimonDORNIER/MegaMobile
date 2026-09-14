@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         immersive();
-        gameView = new GameViewV71(this);
+        gameView = new GameViewV72(this);
         setContentView(gameView);
         UpdateManager.checkAndUpdate(this);
     }
