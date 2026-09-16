@@ -1,17 +1,14 @@
 {
-  "versionCode": 10,
-  "versionName": "0.7.2",
+  "versionCode": 12,
+  "versionName": "1.0.0",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p01.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p02.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p03.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p04.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p05.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p06.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p07.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v0.7.2.p08.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q00.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q01.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q02.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q03.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q04.b64"
   ],
-  "sha256": "4d2f1d36c45ae54cfc60e4ca0658fbf2e6fa134251e937d1c9259b8dba030f14",
-  "note": "V0.7.2 : petite mise à jour de test du système automatique. Un marqueur jaune V0.7.2 — TEST MAJ AUTO OK apparaît sur l’écran d’accueil."
+  "sha256": "fa440548d85f6a27bde7510cc2996638fa9431405b38c1fb3bf1ee645a727f3e",
+  "note": "V1.0.0 : version complète ASCENSION — drones, évolutions d'armes, élites, contrats, némésis, cataclysmes, Impulsion du Vide, Dernier Souffle, paliers de puissance et pression anti-stagnation."
 }
