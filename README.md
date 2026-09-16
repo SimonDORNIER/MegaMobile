@@ -1,35 +1,55 @@
 # MegaMobile
 
-Jeu mobile survivor inspiré du rythme et de la montée en puissance de Megabonk, développé comme une application Android native légère.
+MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
-## Contraintes principales
-- Jeu **uniquement en orientation verticale (portrait)**.
-- Rendu 2D / 2.5D natif Android, sans Unity, Godot ni navigateur à ouvrir.
-- Interface pensée pour le tactile et jouable à une main autant que possible.
-- Parties infinies jusqu'à la mort, difficulté en hausse continue.
-- Priorité aux performances sur téléphone pendant les longues parties.
+## Version actuelle
+**V1.0.0 — ASCENSION**
 
-## V0.3 native
-La base actuelle comprend :
-- joystick tactile dynamique ;
-- dash avec invulnérabilité courte et recharge ;
-- tirs automatiques et ciblage automatique ;
-- hordes avec plusieurs familles d'ennemis ;
-- ennemis rapides, tanks et tireurs ;
-- boss périodiques et coffres ;
-- XP, niveaux et trois choix d'améliorations ;
-- raretés Commun, Rare, Épique et Légendaire ;
-- statistiques de dégâts, cadence, vitesse, portée, critique, armure, régénération, aimant et multishot ;
-- quatre familles d'armes cumulables : Aura, Orbitales, Foudre et Roquettes ;
+La V1.0 est la première version considérée comme complète et jouable de bout en bout.
+
+## Gameplay
+- joystick tactile dynamique récupérable presque partout sur l'écran ;
+- dash avec courte invulnérabilité ;
+- attaques et ciblage automatiques ;
+- hordes qui montent continuellement en puissance ;
+- ennemis rapides, tanks, tireurs, élites et variantes spéciales ;
+- boss périodiques, boss enragés et cataclysmes ;
+- XP, niveaux illimités et trois choix d'améliorations ;
 - sélection automatique des améliorations ;
-- pause, recommencer et quitter ;
-- difficulté infinie, compteur d'éliminations et score ;
-- effets 2.5D légers : ombres, particules, flash de dégâts et effets d'armes.
+- raretés et montée en puissance pendant la partie ;
+- Aura, Orbitales, Foudre, Roquettes, Drones et Impulsion du Vide ;
+- évolutions d'armes : Halo solaire, Vortex de lames, Cœur d'orage et Essaim de siège ;
+- combos, actes, frappes orbitales et balises ;
+- reliques et événements de partie ;
+- contrats temporisés avec récompense ou punition ;
+- Némésis et primes majeures ;
+- jauge de Furie et mode Surpuissance ;
+- Ascension après plusieurs boss ;
+- paliers de puissance tous les 10 niveaux ;
+- Dernier Souffle, utilisable une fois par run ;
+- pression anti-stagnation pour éviter les moments sans ennemis ni progression ;
+- score, éliminations, statistiques persistantes et record de temps.
+
+## Principes du jeu
+- uniquement en **portrait** ;
+- application Android native légère ;
+- pas de progression obligatoire entre les parties : chaque run repart sur une base propre ;
+- partie infinie jusqu'à la mort ;
+- difficulté qui continue d'augmenter ;
+- priorité à la lisibilité et aux performances sur téléphone.
 
 ## Mise à jour automatique
-Le dossier `live/` contient le manifeste et la configuration distante. L'application charge `live/config.json` au démarrage avec un fallback hors-ligne. Cela permet de modifier l'équilibrage et certains paramètres sans réinstaller l'APK.
+`live/app.json` est le canal de mise à jour de l'application.
 
-Les modifications profondes du moteur Android nécessitent encore une APK. Le workflow GitHub Actions construit automatiquement une APK de test après chaque modification du moteur.
+Au lancement, MegaMobile :
+1. vérifie la version publiée ;
+2. télécharge automatiquement les morceaux de l'APK ;
+3. reconstruit et vérifie l'APK avec SHA-256 ;
+4. ouvre l'installateur Android.
 
-## Orientation du projet
-Le contenu, les armes, les ennemis, la progression et l'optimisation seront enrichis progressivement en conservant une architecture adaptée aux parties très longues.
+Android demande toujours une confirmation avant de remplacer l'application. Cette confirmation est la seule étape manuelle pour une mise à jour du moteur.
+
+Les visuels et certains paramètres de contenu restent également récupérables à distance depuis le dépôt.
+
+## Build
+Le projet est compilé automatiquement par GitHub Actions. Le package Android reste `com.megamobile.game` afin que toutes les versions puissent se mettre à jour les unes les autres avec la même signature.
