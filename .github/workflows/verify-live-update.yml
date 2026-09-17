@@ -4,59 +4,34 @@ on:
   push:
     paths:
       - '.github/workflows/verify-live-update.yml'
+      - 'live/app.json'
+      - 'live/apk/v1.0.0.q*.b64'
   workflow_dispatch:
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout full history
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Test historical q01 q03 combinations
+      - name: Rebuild and verify published APK
         shell: bash
         run: |
-          set -u
-          BASE=6c6409260dc6c48d7d3de233f703366b25b138dc
-          Q01_NEW=1833d15f5596b7f885d3755ae9b477d1211887cb
-          Q03_NEW=72a92fa4f2e21716abf51787966578891f050572
-
-          build_variant() {
-            name="$1"; q01_ref="$2"; q03_ref="$3"
-            out="/tmp/${name}.apk"
-            rm -f "$out"; touch "$out"
-            echo "===== VARIANT $name q01=$q01_ref q03=$q03_ref ====="
-            for part in q00 q01 q02 q03 q04; do
-              ref="$BASE"
-              [ "$part" = q01 ] && ref="$q01_ref"
-              [ "$part" = q03 ] && ref="$q03_ref"
-              git show "${ref}:live/apk/v1.0.0.${part}.b64" > "/tmp/${name}-${part}.b64"
-              chars=$(wc -c < "/tmp/${name}-${part}.b64")
-              echo "PART $part ref=$ref chars=$chars"
-              base64 --decode "/tmp/${name}-${part}.b64" >> "$out" || { echo "BASE64_VALID=NO"; return; }
-            done
-            echo "APK_BYTES=$(wc -c < "$out")"
-            echo "APK_SHA256=$(sha256sum "$out" | awk '{print $1}')"
-            if unzip -t "$out" >/tmp/${name}-unzip.log 2>&1; then
-              echo "APK_ZIP_VALID=YES"
-              keytool -printcert -jarfile "$out" 2>/dev/null | sed -n '1,12p' || true
-            else
-              echo "APK_ZIP_VALID=NO"
-              tail -n 4 /tmp/${name}-unzip.log
-            fi
-          }
-
-          build_variant old_old "$BASE" "$BASE"
-          build_variant new_old "$Q01_NEW" "$BASE"
-          build_variant old_new "$BASE" "$Q03_NEW"
-          build_variant new_new "$Q01_NEW" "$Q03_NEW"
-
-          echo "===== MANIFEST EXPECTED ====="
-          python3 - <<'PY'
-          import json
-          m=json.load(open('live/app.json'))
-          print('MANIFEST_SHA256='+m['sha256'])
-          print('MANIFEST_VERSION='+m['versionName'])
-          PY
+          set -euo pipefail
+          OUT=/tmp/MegaMobile-v1.0.0.apk
+          : > "$OUT"
+          for part in q00 q01 q02 q03 q04; do
+            f="live/apk/v1.0.0.${part}.b64"
+            echo "PART $part chars=$(wc -c < "$f")"
+            base64 --decode "$f" >> "$OUT"
+          done
+          actual=$(sha256sum "$OUT" | awk '{print $1}')
+          expected=$(python3 -c "import json; print(json.load(open('live/app.json'))['sha256'])")
+          echo "APK_BYTES=$(wc -c < "$OUT")"
+          echo "APK_SHA256=$actual"
+          echo "MANIFEST_SHA256=$expected"
+          test "$actual" = "$expected"
+          unzip -t "$OUT"
+          keytool -printcert -jarfile "$OUT" | sed -n '1,16p'
+          echo 'LIVE_UPDATE_VALID=YES'
