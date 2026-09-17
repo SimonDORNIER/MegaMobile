@@ -3,9 +3,18 @@
 MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
 ## Version actuelle
-**V1.0.0 — ASCENSION**
+**V1.0.1 — ENDLESS STABILITY**
 
-La V1.0 est la première version considérée comme complète et jouable de bout en bout.
+La V1.0.1 renforce les parties très longues sans modifier le principe du jeu : la difficulté continue de monter jusqu'à la mort.
+
+### Changements V1.0.1
+- courbe d'XP plafonnée à haut niveau pour éviter une progression pratiquement figée ;
+- population minimale de horde qui augmente avec le niveau et le temps ;
+- ennemis perdus très loin replacés autour de la zone de jeu sans perdre leurs PV ni leurs récompenses ;
+- relance automatique si aucune élimination n'arrive pendant trop longtemps ;
+- accumulation excessive de gemmes ramenée progressivement vers le joueur afin de préserver l'XP ;
+- limites de sécurité sur les particules, textes, arcs et projectiles pour réduire les blocages lors des très longues parties ;
+- difficulté minimale renforcée par le niveau pour éviter qu'un build devienne définitivement intouchable.
 
 ## Gameplay
 - joystick tactile dynamique récupérable presque partout sur l'écran ;
