@@ -1,0 +1,50 @@
+name: Verify MegaMobile live update
+
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-live-update.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild APK exactly like Android updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/MegaMobile-1.0.0.apk
+          touch /tmp/MegaMobile-1.0.0.apk
+          for f in \
+            live/apk/v1.0.0.q00.b64 \
+            live/apk/v1.0.0.q01.b64 \
+            live/apk/v1.0.0.q02.b64 \
+            live/apk/v1.0.0.q03.b64 \
+            live/apk/v1.0.0.q04.b64; do
+            echo "PART $f chars=$(wc -c < "$f")"
+            base64 --decode "$f" >> /tmp/MegaMobile-1.0.0.apk
+          done
+          echo "APK_BYTES=$(wc -c < /tmp/MegaMobile-1.0.0.apk)"
+          echo "APK_SHA256=$(sha256sum /tmp/MegaMobile-1.0.0.apk | awk '{print $1}')"
+          echo "MANIFEST_SHA256=$(python3 - <<'PY'
+          import json
+          print(json.load(open('live/app.json'))['sha256'])
+          PY
+          )"
+
+      - name: Validate APK archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t /tmp/MegaMobile-1.0.0.apk
+          echo 'APK_ZIP_VALID=YES'
+
+      - name: Inspect signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -printcert -jarfile /tmp/MegaMobile-1.0.0.apk | sed -n '1,20p'
