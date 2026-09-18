@@ -1,0 +1,14 @@
+.gradle/
+.secrets/
+**/build/
+local.properties
+.idea/
+*.iml
+*.jks
+*.keystore
+*.apk
+*.aab
+*-signing-backup-*.zip
+__pycache__/
+*.pyc
+.DS_Store
