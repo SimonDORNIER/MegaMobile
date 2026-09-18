@@ -22,13 +22,22 @@ if [[ -z "$apksigner_bin" ]]; then
   exit 1
 fi
 
-verification=$($apksigner_bin verify --verbose --print-certs "$apk")
-actual=$(printf '%s\n' "$verification" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)
+if ! verification=$("$apksigner_bin" verify --verbose --print-certs "$apk" 2>&1); then
+  printf '%s\n' "$verification" >&2
+  exit 1
+fi
+
+actual=$(
+  printf '%s\n' "$verification" \
+    | sed -nE 's/^[[:space:]]*Signer #[0-9]+ certificate SHA-256 digest:[[:space:]]*//Ip' \
+    | head -n 1
+)
 expected=$(tr -d '[:space:]:-' < "$expected_file")
 actual=$(printf '%s' "$actual" | tr -d '[:space:]:-')
 
 if [[ -z "$actual" ]]; then
   echo "Impossible de lire l'empreinte du signataire" >&2
+  printf '%s\n' "$verification" >&2
   exit 1
 fi
 if [[ "${actual,,}" != "${expected,,}" ]]; then
