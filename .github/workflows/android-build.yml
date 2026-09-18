@@ -33,6 +33,9 @@ jobs:
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Test release tooling
+        run: python3 -m unittest discover -s tools/tests -v
+
       - name: Test, lint and build unsigned release APK
         run: ./gradlew --no-daemon test lint :app:assembleRelease --stacktrace
 
