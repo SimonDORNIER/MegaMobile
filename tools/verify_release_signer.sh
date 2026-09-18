@@ -29,7 +29,7 @@ fi
 
 actual=$(
   printf '%s\n' "$verification" \
-    | sed -nE 's/^[[:space:]]*Signer #[0-9]+ certificate SHA-256 digest:[[:space:]]*//Ip' \
+    | sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*//Ip' \
     | head -n 1
 )
 expected=$(tr -d '[:space:]:-' < "$expected_file")
