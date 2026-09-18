@@ -1,11 +1,17 @@
 name: Verify MegaMobile live update
 
+permissions:
+  contents: read
+
 on:
   push:
     paths:
       - '.github/workflows/verify-live-update.yml'
+      - 'tools/verify_live_update.py'
+      - 'tools/verify_release_signer.sh'
+      - 'release/signing-certificate.sha256'
       - 'live/app.json'
-      - 'live/apk/v1.0.0.q*.b64'
+      - 'live/apk/**'
   workflow_dispatch:
 
 jobs:
@@ -16,22 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Rebuild and verify published APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          OUT=/tmp/MegaMobile-v1.0.0.apk
-          : > "$OUT"
-          for part in q00 q01 q02 q03 q04; do
-            f="live/apk/v1.0.0.${part}.b64"
-            echo "PART $part chars=$(wc -c < "$f")"
-            base64 --decode "$f" >> "$OUT"
-          done
-          actual=$(sha256sum "$OUT" | awk '{print $1}')
-          expected=$(python3 -c "import json; print(json.load(open('live/app.json'))['sha256'])")
-          echo "APK_BYTES=$(wc -c < "$OUT")"
-          echo "APK_SHA256=$actual"
-          echo "MANIFEST_SHA256=$expected"
-          test "$actual" = "$expected"
-          unzip -t "$OUT"
-          keytool -printcert -jarfile "$OUT" | sed -n '1,16p'
-          echo 'LIVE_UPDATE_VALID=YES'
+        run: python3 tools/verify_live_update.py --output /tmp/MegaMobile-live.apk
+
+      - name: Verify APK signer
+        run: tools/verify_release_signer.sh /tmp/MegaMobile-live.apk

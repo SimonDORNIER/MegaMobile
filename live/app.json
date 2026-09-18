@@ -1,14 +1,11 @@
 {
-  "versionCode": 12,
-  "versionName": "1.0.0",
+  "versionCode": 13,
+  "versionName": "1.0.1",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q00.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q01.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q02.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q03.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.0.q04.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.1.part00.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.1.part01.b64"
   ],
-  "sha256": "fa440548d85f6a27bde7510cc2996638fa9431405b38c1fb3bf1ee645a727f3e",
-  "note": "V1.0.0 : version complète ASCENSION — drones, évolutions d'armes, élites, contrats, némésis, cataclysmes, Impulsion du Vide, Dernier Souffle, paliers de puissance et pression anti-stagnation."
+  "sha256": "87b0df10550fc40f9818035a531d97f9a1d9f9203ab53fd68ec4c9cf1a2a04ab",
+  "note": "Nouvelle version Android fiable et préparation des prochaines améliorations."
 }

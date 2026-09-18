@@ -1,5 +1,16 @@
 plugins { id 'com.android.application' }
 
+def releaseKeystorePath = System.getenv('MEGAMOBILE_KEYSTORE_PATH')
+def releaseStorePassword = System.getenv('MEGAMOBILE_KEYSTORE_PASSWORD')
+def releaseKeyAlias = System.getenv('MEGAMOBILE_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('MEGAMOBILE_KEY_PASSWORD')
+def releaseSigningConfigured = [
+        releaseKeystorePath,
+        releaseStorePassword,
+        releaseKeyAlias,
+        releaseKeyPassword
+].every { it != null && !it.trim().isEmpty() }
+
 android {
     namespace 'com.megamobile.game'
     compileSdk 35
@@ -12,17 +23,42 @@ android {
         versionName '1.0.1'
     }
 
+    signingConfigs {
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+
     buildTypes {
-        release { minifyEnabled false }
+        release {
+            minifyEnabled false
+            if (releaseSigningConfigured) signingConfig signingConfigs.release
+        }
         debug { debuggable true }
     }
 
     lint {
         disable 'ExpiredTargetSdkVersion'
+        // Le workflow exécute explicitement `lint`; éviter de le relancer pendant l'assemblage.
+        checkReleaseBuilds false
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.register('printVersionInfo') {
+    doLast {
+        println "${android.defaultConfig.versionCode}|${android.defaultConfig.versionName}"
     }
 }
