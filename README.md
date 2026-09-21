@@ -3,6 +3,22 @@
 MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
 ## Version actuelle
+**V1.2.0 — SYNERGIES**
+
+La V1.2.0 libère l'espace de jeu, généralise les synergies de build et améliore les révélations de récompenses.
+
+### Changements V1.2.0
+- HUD compact qui laisse beaucoup plus de place à l'action sur Pixel 7a ;
+- record retiré de l'écran de jeu et commandes secondaires regroupées en haut ;
+- cadence globale appliquée aux balles, à l'aura, aux orbitales, à la foudre, aux roquettes, aux drones, aux évolutions et à l'Impulsion du Vide ;
+- critique global appliqué à toutes les sources de dégâts ;
+- portée appliquée aux armes, aux zones d'effet et aux évolutions ;
+- tir multiple partagé par les balles, les volées de roquettes et l'artillerie ;
+- artefacts reformulés et reliés à toutes les armes concernées ;
+- ouverture de coffre en plusieurs étapes avec anticipation, ouverture, verrouillage de rareté et révélation finale ;
+- animation de passage de niveau plus courte et plus discrète avant les choix.
+
+## Version précédente
 **V1.1.0 — MOBILE WORLD**
 
 La V1.1.0 adapte l'interface aux téléphones modernes et transforme le terrain infini en carte évolutive à explorer.
@@ -19,7 +35,7 @@ La V1.1.0 adapte l'interface aux téléphones modernes et transforme le terrain 
 - carte limitée qui s'agrandit après avoir terminé ses coffres, captures, caches, secrets et zones bonus ;
 - mini-carte et suivi de progression de chaque zone.
 
-## Version précédente
+## Version antérieure
 **V1.0.2 — CONTRÔLES FLUIDES**
 
 La V1.0.2 conserve le déplacement du joueur après une sélection automatique et ajoute une icône propre à l'application Android.
@@ -45,7 +61,6 @@ La V1.0.1 renforce les parties très longues sans modifier le principe du jeu : 
 
 ## Gameplay
 - joystick tactile dynamique récupérable presque partout sur l'écran ;
-- dash avec courte invulnérabilité ;
 - attaques et ciblage automatiques ;
 - hordes qui montent continuellement en puissance ;
 - ennemis rapides, tanks, tireurs, élites et variantes spéciales ;

@@ -44,7 +44,7 @@ public class GameViewFinal extends GameViewPro {
     private int speedModeIndex = 0;
 
     private Field fPaused, fDead, fChoosing, fPx, fPy, fCamX, fCamY, fElapsed;
-    private Field fEnemies, fGems, fKills, fScore, fHp, fMaxHp, fDamage, fFireInterval, fSpeed, fCrit;
+    private Field fEnemies, fGems, fKills, fScore, fHp, fMaxHp, fDamage, fFireInterval, fWeaponHaste, fSpeed, fCrit;
     private Method mShowBanner, mGainXp, mUpdate, mUpdateVisuals;
     private Class<?> gemClass;
     private Field gemX, gemY;
@@ -79,6 +79,7 @@ public class GameViewFinal extends GameViewPro {
             fMaxHp = baseField("maxHp");
             fDamage = baseField("damage");
             fFireInterval = baseField("fireInterval");
+            fWeaponHaste = baseField("weaponHaste");
             fSpeed = baseField("speed");
             fCrit = baseField("crit");
             mShowBanner = GameView.class.getDeclaredMethod("showBanner", String.class);
@@ -223,7 +224,7 @@ public class GameViewFinal extends GameViewPro {
                 banner("NUKE ! " + count + " ennemis");
             } else if (type == PICKUP_ULTRA) {
                 if (fDamage != null) fDamage.setFloat(this, number(fDamage) * 1.22f);
-                if (fFireInterval != null) fFireInterval.setFloat(this, Math.max(0.08f, number(fFireInterval) / 1.14f));
+                if (fWeaponHaste != null) fWeaponHaste.setFloat(this, Math.min(8f, number(fWeaponHaste) * 1.14f));
                 if (fSpeed != null) fSpeed.setFloat(this, number(fSpeed) * 1.08f);
                 if (fCrit != null) fCrit.setFloat(this, Math.min(0.85f, number(fCrit) + 0.08f));
                 float oldMax = number(fMaxHp);
@@ -259,7 +260,6 @@ public class GameViewFinal extends GameViewPro {
         super.onDraw(canvas);
         if (!inMenu && !bool(fDead) && !bool(fChoosing) && !bool(fPaused)) drawPickups(canvas);
         if (!inMenu && !bool(fDead) && !bool(fChoosing) && !bool(fPaused)) {
-            drawBestScore(canvas);
             drawSpeedControl(canvas);
         }
         if (inMenu) drawMainMenu(canvas);
@@ -296,21 +296,23 @@ public class GameViewFinal extends GameViewPro {
     }
 
     private void drawSpeedControl(Canvas canvas) {
-        float scale = uiScale();
-        float w = 88f * scale, h = 42f * scale;
-        float left = getWidth() - w - 18f * scale;
-        float top = 205f * scale;
+        float scale = Math.min(1.22f, uiScale());
+        float w = 58f * scale, h = 30f * scale;
+        float pad = 12f * scale;
+        float pauseSize = 44f * scale;
+        float left = getWidth() - pad - pauseSize - 6f * scale - w;
+        float top = 8f * scale;
         speedRect.set(left, top, left + w, top + h);
         ui.setColor(Color.argb(170, 24, 35, 40));
-        canvas.drawRoundRect(speedRect, 12f * scale, 12f * scale, ui);
+        canvas.drawRoundRect(speedRect, 9f * scale, 9f * scale, ui);
         stroke.setColor(Color.argb(150, 120, 225, 240));
         stroke.setStrokeWidth(2f * scale);
-        canvas.drawRoundRect(speedRect, 12f * scale, 12f * scale, stroke);
+        canvas.drawRoundRect(speedRect, 9f * scale, 9f * scale, stroke);
         ui.setTextAlign(Paint.Align.CENTER);
         ui.setFakeBoldText(true);
-        ui.setTextSize(15f * scale);
+        ui.setTextSize(12f * scale);
         ui.setColor(Color.WHITE);
-        canvas.drawText("×" + speedModes[speedModeIndex], speedRect.centerX(), speedRect.centerY() + 5f * scale, ui);
+        canvas.drawText("×" + speedModes[speedModeIndex], speedRect.centerX(), speedRect.centerY() + 4f * scale, ui);
         ui.setFakeBoldText(false);
     }
 
@@ -352,7 +354,7 @@ public class GameViewFinal extends GameViewPro {
         ui.setTextSize(17f * scale); ui.setColor(Color.rgb(225, 230, 232));
         c.drawText("Record : " + bestScore, w / 2f, playRect.bottom + 44f * scale, ui);
         ui.setFakeBoldText(false); ui.setTextSize(13f * scale); ui.setColor(Color.rgb(150, 168, 172));
-        c.drawText("V1.1 • exploration, coffres et carte évolutive", w / 2f, h - 42f * scale, ui);
+        c.drawText("V1.2 • HUD compact, synergies et révélations", w / 2f, h - 42f * scale, ui);
         ui.setFakeBoldText(false);
     }
 

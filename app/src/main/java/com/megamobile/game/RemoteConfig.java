@@ -18,8 +18,6 @@ public final class RemoteConfig {
     public int enemyCap = 180;
     public float bossInterval = 45f;
     public float xpMagnet = 170f;
-    public float dashCooldown = 2.6f;
-    public float dashDistance = 230f;
 
     public interface Callback {
         void onLoaded(RemoteConfig config);
@@ -48,8 +46,6 @@ public final class RemoteConfig {
                     result.enemyCap = json.optInt("enemyCap", result.enemyCap);
                     result.bossInterval = (float) json.optDouble("bossInterval", result.bossInterval);
                     result.xpMagnet = (float) json.optDouble("xpMagnet", result.xpMagnet);
-                    result.dashCooldown = (float) json.optDouble("dashCooldown", result.dashCooldown);
-                    result.dashDistance = (float) json.optDouble("dashDistance", result.dashDistance);
                 }
             } catch (Exception ignored) {
                 // Les valeurs embarquées restent utilisables hors-ligne.
@@ -71,7 +67,5 @@ public final class RemoteConfig {
         enemyCap = other.enemyCap;
         bossInterval = other.bossInterval;
         xpMagnet = other.xpMagnet;
-        dashCooldown = other.dashCooldown;
-        dashDistance = other.dashDistance;
     }
 }

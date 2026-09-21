@@ -22,7 +22,7 @@ public class GameViewV10 extends GameViewV8 {
     private final Paint p10 = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint s10 = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fInvuln;
+    private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fRange, fWeaponHaste, fInvuln;
     private Field fPaused, fDead, fChoosing, fEnemies, fInMenu;
     private Method mSpawnEnemy, mGainXp, mDamageEnemy, mShowBanner;
 
@@ -60,6 +60,8 @@ public class GameViewV10 extends GameViewV8 {
             fHp = baseField("hp");
             fMaxHp = baseField("maxHp");
             fDamage = baseField("damage");
+            fRange = baseField("range");
+            fWeaponHaste = baseField("weaponHaste");
             fInvuln = baseField("invuln");
             fPaused = baseField("paused");
             fDead = baseField("dead");
@@ -215,10 +217,12 @@ public class GameViewV10 extends GameViewV8 {
         if (level < 28) return;
         voidCd -= dt;
         if (voidCd > 0f) return;
-        voidCd = Math.max(3.4f, 7.2f - level * 0.045f);
+        float haste = Math.max(1f, number(fWeaponHaste));
+        voidCd = Math.max(1.15f, Math.max(3.4f, 7.2f - level * 0.045f) / haste);
 
         float px = baseFloat("px"), py = baseFloat("py");
-        float radius = Math.min(430f, 250f + level * 3.0f);
+        float areaScale = 1f + Math.max(0f, number(fRange) / 420f - 1f) * 0.65f;
+        float radius = Math.min(720f, (250f + level * 3.0f) * areaScale);
         float dmg = number(fDamage) * (1.85f + Math.min(2.0f, level * 0.025f));
         int hits = 0;
         for (Object e : snapshotEnemies10()) {

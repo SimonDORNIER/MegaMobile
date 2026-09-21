@@ -598,26 +598,28 @@ public class GameViewV7 extends GameViewV6 {
     }
 
     private void drawDirectorHud(Canvas canvas) {
-        float y = 250f;
+        float scale = Math.min(1.22f, Math.max(1f, Math.min(getWidth() / 420f, getHeight() / 820f)));
+        float x = 12f * scale;
+        float y = 165f * scale;
         p.setTextAlign(Paint.Align.LEFT);
         p.setFakeBoldText(true);
-        p.setTextSize(13f);
+        p.setTextSize(9f * scale);
         p.setColor(Color.rgb(170, 205, 210));
-        canvas.drawText("ACTE " + currentAct + "   •   NIV " + integer(fLevel), 20f, y, p);
+        canvas.drawText("ACTE " + currentAct, x, y, p);
         if (combo > 0) {
             p.setColor(combo >= 50 ? Color.rgb(255, 190, 80) : Color.rgb(115, 230, 255));
-            canvas.drawText("COMBO ×" + combo, 20f, y + 21f, p);
+            canvas.drawText("COMBO ×" + combo, x + 48f * scale, y, p);
             float ratio = Math.max(0f, Math.min(1f, comboTimer / 3.2f));
             p.setColor(Color.argb(120, 255, 255, 255));
-            canvas.drawRoundRect(20f, y + 27f, 140f, y + 32f, 3f, 3f, p);
+            canvas.drawRoundRect(x, y + 5f * scale, x + 104f * scale, y + 8f * scale, 2f * scale, 2f * scale, p);
             p.setColor(Color.rgb(100, 225, 255));
-            canvas.drawRoundRect(20f, y + 27f, 20f + 120f * ratio, y + 32f, 3f, 3f, p);
+            canvas.drawRoundRect(x, y + 5f * scale, x + 104f * scale * ratio, y + 8f * scale, 2f * scale, 2f * scale, p);
         }
         if (directorLabelLife > 0f) {
             p.setTextAlign(Paint.Align.CENTER);
-            p.setTextSize(13f);
+            p.setTextSize(10f * scale);
             p.setColor(Color.argb((int) (220f * Math.min(1f, directorLabelLife)), 245, 245, 245));
-            canvas.drawText(directorLabel, getWidth() * 0.5f, 285f, p);
+            canvas.drawText(directorLabel, getWidth() * 0.5f, y + 27f * scale, p);
         }
         p.setFakeBoldText(false);
     }

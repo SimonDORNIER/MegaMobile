@@ -24,7 +24,7 @@ public class GameViewV8 extends GameViewV7Final {
     private final Random rng = new Random();
 
     private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fSpeed;
-    private Field fRegen, fCrit, fMulti, fAura, fOrbit, fLightning, fRocket, fEnemies;
+    private Field fRegen, fCrit, fMulti, fRange, fWeaponHaste, fAura, fOrbit, fLightning, fRocket, fEnemies;
     private Field fPx, fPy, fPaused, fDead, fChoosing, fInvuln, fInMenu;
     private Method mSpawnEnemy, mGainXp, mDamageEnemy, mShowBanner;
 
@@ -90,6 +90,8 @@ public class GameViewV8 extends GameViewV7Final {
             fRegen = baseField("regen");
             fCrit = baseField("crit");
             fMulti = baseField("multi");
+            fRange = baseField("range");
+            fWeaponHaste = baseField("weaponHaste");
             fAura = baseField("auraLevel");
             fOrbit = baseField("orbitLevel");
             fLightning = baseField("lightningLevel");
@@ -139,6 +141,14 @@ public class GameViewV8 extends GameViewV7Final {
     private int integer(Field f) {
         try { return f == null ? 0 : f.getInt(this); }
         catch (Exception ignored) { return 0; }
+    }
+
+    private float haste() {
+        return Math.max(1f, number(fWeaponHaste));
+    }
+
+    private float areaScale() {
+        return 1f + Math.max(0f, number(fRange) / 420f - 1f) * 0.65f;
     }
 
     private void setFloat(Field f, float v) {
@@ -191,7 +201,7 @@ public class GameViewV8 extends GameViewV7Final {
             overdrivePulse -= dt;
             setFloat(fInvuln, Math.max(number(fInvuln), 0.07f));
             if (overdrivePulse <= 0f) {
-                overdrivePulse = 0.36f;
+                overdrivePulse = Math.max(0.12f, 0.36f / haste());
                 overdriveStrike();
             }
         } else if (fury >= 100f) startOverdrive();
@@ -261,7 +271,7 @@ public class GameViewV8 extends GameViewV7Final {
         if (droneTier <= 0) return;
         droneCd -= dt;
         if (droneCd > 0f) return;
-        droneCd = Math.max(0.22f, 0.92f - droneTier * 0.13f);
+        droneCd = Math.max(0.10f, (0.92f - droneTier * 0.13f) / haste());
 
         List<Object> list = snapshotEnemies();
         if (list.isEmpty()) return;
@@ -302,16 +312,16 @@ public class GameViewV8 extends GameViewV7Final {
         if (integer(fLevel) >= 12) {
             novaCd -= dt;
             if (novaCd <= 0f) {
-                novaCd = Math.max(2.7f, 6.0f - integer(fLevel) * 0.055f);
-                novaBlast(145f + integer(fLevel) * 2.2f, number(fDamage) * 0.72f, Color.rgb(116, 227, 170));
+                novaCd = Math.max(1.0f, Math.max(2.7f, 6.0f - integer(fLevel) * 0.055f) / haste());
+                novaBlast((145f + integer(fLevel) * 2.2f) * areaScale(), number(fDamage) * 0.72f, Color.rgb(116, 227, 170));
             }
         }
 
         if (solarHalo) {
             evolutionCdA -= dt;
             if (evolutionCdA <= 0f) {
-                evolutionCdA = 1.25f;
-                int hits = novaBlast(205f, number(fDamage) * (0.52f + aura * 0.06f), Color.rgb(255, 194, 68));
+                evolutionCdA = Math.max(0.30f, 1.25f / haste());
+                int hits = novaBlast(205f * areaScale(), number(fDamage) * (0.52f + aura * 0.06f), Color.rgb(255, 194, 68));
                 if (hits > 0) {
                     float max = number(fMaxHp);
                     setFloat(fHp, Math.min(max, number(fHp) + max * 0.0045f));
@@ -322,24 +332,25 @@ public class GameViewV8 extends GameViewV7Final {
         if (bladeVortex) {
             evolutionCdB -= dt;
             if (evolutionCdB <= 0f) {
-                evolutionCdB = 2.65f;
-                novaBlast(275f, number(fDamage) * (1.25f + orbit * 0.10f), Color.rgb(230, 238, 250));
+                evolutionCdB = Math.max(0.55f, 2.65f / haste());
+                novaBlast(275f * areaScale(), number(fDamage) * (1.25f + orbit * 0.10f), Color.rgb(230, 238, 250));
             }
         }
 
         if (stormCore) {
             evolutionCdC -= dt;
             if (evolutionCdC <= 0f) {
-                evolutionCdC = 2.10f;
-                chainStrike(7 + lightning, number(fDamage) * (1.10f + lightning * 0.11f), 720f);
+                evolutionCdC = Math.max(0.45f, 2.10f / haste());
+                chainStrike(7 + lightning, number(fDamage) * (1.10f + lightning * 0.11f), 720f * areaScale());
             }
         }
 
         if (siegeSwarm) {
             evolutionCdD -= dt;
             if (evolutionCdD <= 0f) {
-                evolutionCdD = 4.2f;
-                artilleryStrike(Math.min(8, 3 + rocket), number(fDamage) * (1.85f + rocket * 0.17f));
+                evolutionCdD = Math.max(0.85f, 4.2f / haste());
+                int salvoBonus = Math.max(0, integer(fMulti) - 1) / 2;
+                artilleryStrike(Math.min(10, 3 + rocket + salvoBonus), number(fDamage) * (1.85f + rocket * 0.17f));
             }
         }
     }
@@ -673,26 +684,27 @@ public class GameViewV8 extends GameViewV7Final {
     }
 
     private void drawV8Hud(Canvas c, int w, int h) {
-        float x = 22f, y = 132f, bw = Math.min(260f, w - 44f), bh = 12f;
+        float scale = Math.min(1.22f, Math.max(1f, Math.min(w / 420f, h / 820f)));
+        float x = 12f * scale, y = 142f * scale, bw = Math.min(150f * scale, w - 24f * scale), bh = 7f * scale;
         p.setColor(Color.argb(160, 8, 14, 16));
-        c.drawRoundRect(new RectF(x, y, x + bw, y + bh), 6f, 6f, p);
+        c.drawRoundRect(new RectF(x, y, x + bw, y + bh), 4f * scale, 4f * scale, p);
         float ratio = overdrive > 0f ? Math.max(0f, overdrive / 10f) : fury / 100f;
         p.setColor(overdrive > 0f ? Color.rgb(255, 207, 65) : Color.rgb(70, 195, 230));
-        c.drawRoundRect(new RectF(x, y, x + bw * ratio, y + bh), 6f, 6f, p);
+        c.drawRoundRect(new RectF(x, y, x + bw * ratio, y + bh), 4f * scale, 4f * scale, p);
         p.setColor(Color.WHITE);
         p.setTextAlign(Paint.Align.LEFT);
-        p.setTextSize(12f);
+        p.setTextSize(9f * scale);
         p.setFakeBoldText(true);
-        c.drawText(overdrive > 0f ? "SURCHARGE " + Math.max(1, (int) Math.ceil(overdrive)) + "s" : "FUREUR " + Math.round(fury) + "%", x, y - 4f, p);
+        c.drawText(overdrive > 0f ? "SURCHARGE " + Math.max(1, (int) Math.ceil(overdrive)) + "s" : "FUREUR " + Math.round(fury) + "%", x, y - 3f * scale, p);
         p.setFakeBoldText(false);
 
-        float textY = y + 34f;
+        float textY = y + 20f * scale;
         if (contractActive) {
             int progress = Math.max(0, integer(fKills) - contractStartKills);
             p.setColor(Color.rgb(255, 226, 145));
-            p.setTextSize(13f);
+            p.setTextSize(9f * scale);
             c.drawText("CONTRAT  " + progress + "/" + contractTarget + "  •  " + Math.max(0, (int) Math.ceil(contractTimer)) + "s", x, textY, p);
-            textY += 20f;
+            textY += 14f * scale;
         }
 
         StringBuilder evolved = new StringBuilder();
@@ -702,7 +714,7 @@ public class GameViewV8 extends GameViewV7Final {
         if (siegeSwarm) evolved.append("✹ ");
         if (evolved.length() > 0 || droneTier > 0 || ascensionRank > 0) {
             p.setColor(Color.rgb(182, 211, 216));
-            p.setTextSize(12f);
+            p.setTextSize(9f * scale);
             String extra = (droneTier > 0 ? "DRONES×" + droneTier + "  " : "")
                     + (ascensionRank > 0 ? "ASCENSION " + ascensionRank + "  " : "") + evolved;
             c.drawText(extra.trim(), x, textY, p);

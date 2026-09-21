@@ -5,7 +5,5 @@
   "difficultySeconds": 58.0,
   "enemyCap": 240,
   "bossInterval": 42.0,
-  "xpMagnet": 235.0,
-  "dashCooldown": 2.2,
-  "dashDistance": 265.0
+  "xpMagnet": 235.0
 }
