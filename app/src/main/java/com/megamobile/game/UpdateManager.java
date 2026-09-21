@@ -29,6 +29,8 @@ public final class UpdateManager {
     private static final String PENDING_PATH = "pending_path";
     private static final String PENDING_NAME = "pending_name";
     private static final String PENDING_CODE = "pending_code";
+    private static final String PENDING_REQUESTED_AT = "pending_requested_at";
+    private static final long INSTALL_RETRY_DELAY_MS = 30_000L;
     private static volatile boolean checking;
 
     private UpdateManager() { }
@@ -40,6 +42,11 @@ public final class UpdateManager {
             boolean foundUpdate = false;
             try {
                 int currentCode = localVersionCode(activity);
+                int pendingCode = activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
+                        .getInt(PENDING_CODE, 0);
+                // Une installation Android est interactive. Tant qu'elle n'est pas
+                // terminée, ne relance pas une seconde demande par-dessus la première.
+                if (pendingCode > currentCode) return;
                 JSONObject manifest = new JSONObject(downloadText(
                         APP_MANIFEST_URL + "?t=" + System.currentTimeMillis()));
                 int remoteCode = manifest.optInt("versionCode", currentCode);
@@ -84,6 +91,7 @@ public final class UpdateManager {
                         .putString(PENDING_PATH, apk.getAbsolutePath())
                         .putString(PENDING_NAME, remoteName)
                         .putInt(PENDING_CODE, remoteCode)
+                        .putLong(PENDING_REQUESTED_AT, System.currentTimeMillis())
                         .apply();
 
                 activity.runOnUiThread(() -> {
@@ -117,6 +125,9 @@ public final class UpdateManager {
         String path = activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
                 .getString(PENDING_PATH, "");
         if (path == null || path.isEmpty()) return;
+        long requestedAt = activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
+                .getLong(PENDING_REQUESTED_AT, 0L);
+        if (requestedAt > 0L && System.currentTimeMillis() - requestedAt < INSTALL_RETRY_DELAY_MS) return;
         File apk = new File(path);
         if (!apk.exists() || apk.length() < 1024) {
             clearPending(activity);
@@ -125,6 +136,9 @@ public final class UpdateManager {
 
         String name = activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
                 .getString(PENDING_NAME, "nouvelle version");
+        activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE).edit()
+                .putLong(PENDING_REQUESTED_AT, System.currentTimeMillis())
+                .apply();
         requestInstall(activity, apk, name);
     }
 
@@ -187,6 +201,7 @@ public final class UpdateManager {
                 .remove(PENDING_PATH)
                 .remove(PENDING_NAME)
                 .remove(PENDING_CODE)
+                .remove(PENDING_REQUESTED_AT)
                 .apply();
     }
 
