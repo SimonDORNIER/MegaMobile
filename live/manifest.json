@@ -1,9 +1,9 @@
 {
-  "contentVersion": "0.5.0-live.1",
-  "engineVersion": 6,
+  "contentVersion": "1.4.0-live.1",
+  "engineVersion": 18,
   "orientation": "portrait",
   "configUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/config.json",
   "skinUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/skin.json",
   "appManifestUrl": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/app.json",
-  "message": "V0.5 présentable : menu, record, joystick global, visuels live, pickups aimant/nuke/soin/ULTRA, vitesses x1/x2/x4/x10/x100 et mise à jour moteur assistée."
+  "message": "V1.4 Héros et Ombres : sprites médiévaux semi-cartoon, animations plus vivantes et joystick compact pour le Pixel 7a."
 }

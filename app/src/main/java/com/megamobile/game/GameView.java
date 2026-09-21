@@ -129,7 +129,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private float joyStartY;
     private float joyX;
     private float joyY;
-    private float joyRadius = 95f;
+    private float joyRadius = 72f;
 
     private final ArrayList<Upgrade> currentChoices = new ArrayList<>();
     private boolean chestChoice;
@@ -179,7 +179,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        joyRadius = 88f * uiScale(w, h);
+        joyRadius = 68f * uiScale(w, h);
         if (!worldReady && w > 0 && h > 0) ensureWorldReady();
     }
 
@@ -1465,7 +1465,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
             stroke.setStrokeWidth(3f * controlScale);
             c.drawCircle(joyStartX, joyStartY, joyRadius, stroke);
             paint.setColor(Color.argb(145, 255, 255, 255));
-            c.drawCircle(joyStartX + joyX * joyRadius, joyStartY + joyY * joyRadius, 34f * controlScale, paint);
+            c.drawCircle(joyStartX + joyX * joyRadius, joyStartY + joyY * joyRadius, 24f * controlScale, paint);
         }
         paint.setFakeBoldText(false);
     }
