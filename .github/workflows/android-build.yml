@@ -53,3 +53,17 @@ jobs:
           name: MegaMobile-release-unsigned
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 30
+
+      - name: Prepare Android APK signer
+        run: |
+          set -euo pipefail
+          signer_jar=$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' -print -quit)
+          test -n "$signer_jar"
+          cp "$signer_jar" "$RUNNER_TEMP/apksigner.jar"
+
+      - name: Upload Android APK signer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-apksigner
+          path: ${{ runner.temp }}/apksigner.jar
+          retention-days: 7
