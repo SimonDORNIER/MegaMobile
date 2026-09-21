@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MegaMobile V1.0.1 reliability layer.
+ * MegaMobile reliability layer introduced in V1.0.1 and maintained in V1.0.2.
  *
  * Keeps very long runs alive by:
  * - flattening the extreme late-game XP requirement;
@@ -322,6 +322,6 @@ public class GameViewV101 extends GameViewV10 {
         patchPaint.setTextAlign(Paint.Align.LEFT);
         patchPaint.setTextSize(11f);
         patchPaint.setColor(Color.argb((int) (180f * Math.min(1f, versionLabelLife)), 178, 220, 225));
-        canvas.drawText("V1.0.1 • ENDLESS STABILITY", 22f, getHeight() - 18f, patchPaint);
+        canvas.drawText("V1.0.2 • ENDLESS STABILITY", 22f, getHeight() - 18f, patchPaint);
     }
 }

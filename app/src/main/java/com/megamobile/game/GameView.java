@@ -583,8 +583,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private void startChoice(boolean fromChest) {
         choosing = true;
         chestChoice = fromChest;
-        moveX = moveY = 0f;
-        joystickPointer = -1;
+        // Une sélection automatique ne doit pas simuler un relâchement du doigt :
+        // le joueur reprend ainsi immédiatement sa trajectoire après le choix.
+        if (!autoChoice) {
+            moveX = moveY = 0f;
+            joystickPointer = -1;
+        }
         currentChoices.clear();
         for (int i = 0; i < 3; i++) {
             Upgrade candidate;
