@@ -164,9 +164,8 @@ public class GameViewPro extends GameView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        // La direction artistique médiévale est désormais rendue par le moteur
-        // lui-même : cela évite que d'anciens sprites live génériques recouvrent
-        // les personnages, les animations et les couleurs de la nouvelle version.
+        if (modalOpen()) return;
+        try { drawRemoteSprites(canvas); } catch (Exception ignored) { }
     }
 
     @SuppressWarnings("unchecked")
@@ -176,20 +175,25 @@ public class GameViewPro extends GameView {
         float camX = fCamX.getFloat(this), camY = fCamY.getFloat(this);
         float playerX = fPx.getFloat(this), playerY = fPy.getFloat(this);
         float anchorX = getWidth() * 0.5f, anchorY = getHeight() * 0.56f;
+        float time = (System.currentTimeMillis() % 120000L) / 1000f;
         canvas.save();
         canvas.clipRect(0f, 250f * scale, getWidth(), getHeight());
         List<Object> gems = (List<Object>) fGems.get(this);
         if (gems != null && skin.gem != null) for (Object obj : gems) {
             bindGem(obj);
             float wx = gemX.getFloat(obj), wy = gemY.getFloat(obj), value = gemValue.getFloat(obj);
-            float size = value >= 20f ? 34f : value >= 3f ? 29f : 24f;
-            drawBitmapCentered(canvas, skin.gem, wx - camX + anchorX, wy - camY + anchorY, size, size);
+            float pulse = 1f + (float) Math.sin(time * 5f + wx * 0.01f) * 0.10f;
+            float size = (value >= 20f ? 34f : value >= 3f ? 29f : 24f) * pulse;
+            drawBitmapCenteredTransformed(canvas, skin.gem, wx - camX + anchorX,
+                    wy - camY + anchorY, size, size, time * 28f);
         }
         List<Object> chests = (List<Object>) fChests.get(this);
         if (chests != null && skin.chest != null) for (Object obj : chests) {
             bindChest(obj);
-            drawBitmapCentered(canvas, skin.chest, chestX.getFloat(obj) - camX + anchorX,
-                    chestY.getFloat(obj) - camY + anchorY, 76f, 76f);
+            float wx = chestX.getFloat(obj), wy = chestY.getFloat(obj);
+            float lift = (float) Math.sin(time * 2.8f + wx * 0.008f) * 3f;
+            drawBitmapCenteredTransformed(canvas, skin.chest, wx - camX + anchorX,
+                    wy - camY + anchorY + lift, 76f, 76f, 0f);
         }
         List<Object> enemies = (List<Object>) fEnemies.get(this);
         if (enemies != null) for (Object obj : enemies) {
@@ -200,11 +204,20 @@ public class GameViewPro extends GameView {
             if (bmp == null) continue;
             float size = Math.max(42f, r * 2.9f);
             if (type == 4) size = Math.max(size, 142f);
-            drawBitmapCentered(canvas, bmp, enemyX.getFloat(obj) - camX + anchorX,
-                    enemyY.getFloat(obj) - camY + anchorY, size, size);
+            if (type == 5) size = Math.max(size, 104f);
+            float wx = enemyX.getFloat(obj), wy = enemyY.getFloat(obj);
+            float bob = (float) Math.sin(time * 4.2f + wx * 0.012f) * (type == 4 ? 4f : 2.2f);
+            float angle = type == 1 ? (float) Math.sin(time * 7f + wy * 0.01f) * 5f : 0f;
+            drawBitmapCenteredTransformed(canvas, bmp, wx - camX + anchorX,
+                    wy - camY + anchorY + bob, size, size, angle);
         }
-        if (skin.player != null) drawBitmapCentered(canvas, skin.player,
-                playerX - camX + anchorX, playerY - camY + anchorY - 3f, 60f, 60f);
+        if (skin.player != null) {
+            float tilt = fJoyX == null ? 0f : fJoyX.getFloat(this) * 5f;
+            float bob = (float) Math.sin(time * 5.2f) * 2f;
+            drawBitmapCenteredTransformed(canvas, skin.player,
+                    playerX - camX + anchorX, playerY - camY + anchorY - 5f + bob,
+                    66f, 66f, tilt);
+        }
         canvas.restore();
     }
 
@@ -228,8 +241,16 @@ public class GameViewPro extends GameView {
         Field f = c.getDeclaredField(name); f.setAccessible(true); return f;
     }
     private void drawBitmapCentered(Canvas canvas, Bitmap bitmap, float cx, float cy, float width, float height) {
+        drawBitmapCenteredTransformed(canvas, bitmap, cx, cy, width, height, 0f);
+    }
+
+    private void drawBitmapCenteredTransformed(Canvas canvas, Bitmap bitmap, float cx, float cy,
+                                               float width, float height, float angle) {
         if (bitmap == null || bitmap.isRecycled()) return;
         RectF dst = new RectF(cx - width / 2f, cy - height / 2f, cx + width / 2f, cy + height / 2f);
+        canvas.save();
+        canvas.rotate(angle, cx, cy);
         canvas.drawBitmap(bitmap, null, dst, skinPaint);
+        canvas.restore();
     }
 }

@@ -16,7 +16,7 @@ public final class RemoteSkin {
     public interface Callback { void onLoaded(RemoteSkin skin); }
     public static RemoteSkin empty() { return new RemoteSkin(); }
     public boolean hasAnyBitmap() { return player != null || grunt != null || fast != null || tank != null || shooter != null || boss != null || chest != null || gem != null; }
-    public Bitmap enemyFor(int type) { switch (type) { case 1:return fast; case 2:return tank; case 3:return shooter; case 4:return boss; default:return grunt; } }
+    public Bitmap enemyFor(int type) { switch (type) { case 1:return fast; case 2:return tank; case 3:return shooter; case 4:return boss; case 5:return tank; default:return grunt; } }
 
     public static void loadAsync(Context context, Callback callback) {
         Thread t = new Thread(() -> {

@@ -1,5 +1,5 @@
 {
-  "skinVersion": "1.0.0",
+  "skinVersion": "1.4.0-medieval",
   "assetsBase": "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/assets/",
   "player": "player.png",
   "grunt": "grunt.png",

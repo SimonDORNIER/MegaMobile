@@ -354,7 +354,7 @@ public class GameViewFinal extends GameViewPro {
         ui.setTextSize(17f * scale); ui.setColor(Color.rgb(225, 230, 232));
         c.drawText("Record : " + bestScore, w / 2f, playRect.bottom + 44f * scale, ui);
         ui.setFakeBoldText(false); ui.setTextSize(13f * scale); ui.setColor(Color.rgb(150, 168, 172));
-        c.drawText("V1.3 • ROYAUME DES OMBRES", w / 2f, h - 42f * scale, ui);
+        c.drawText("V1.4 • HÉROS ET OMBRES", w / 2f, h - 42f * scale, ui);
         ui.setFakeBoldText(false);
     }
 
