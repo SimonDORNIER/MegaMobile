@@ -307,6 +307,13 @@ public class GameViewV7 extends GameViewV6 {
             Object enemy = entry.getKey();
             EliteInfo info = entry.getValue();
             if (!list.contains(enemy)) {
+                try {
+                    bindEnemy(enemy);
+                    if (rng.nextFloat() < 0.55f) {
+                        dropChest(eX.getFloat(enemy), eY.getFloat(enemy), CHEST_ARTIFACT);
+                        label("COFFRE D'ARTEFACT LÂCHÉ");
+                    }
+                } catch (Exception ignored) { }
                 eliteReward(info.kind);
                 it.remove();
                 continue;
@@ -471,19 +478,14 @@ public class GameViewV7 extends GameViewV6 {
             drawMenuV7(canvas);
             return;
         }
-        if (bool(fDead)) return;
+        if (bool(fDead) || bool(fChoosing) || bool(fPaused)) return;
         drawWorldEvents(canvas);
         drawEliteOverlays(canvas);
         drawDirectorHud(canvas);
     }
 
     private void drawMenuV7(Canvas canvas) {
-        p.setTextAlign(Paint.Align.CENTER);
-        p.setFakeBoldText(true);
-        p.setTextSize(14f);
-        p.setColor(Color.rgb(130, 225, 235));
-        canvas.drawText("V0.7 • élites • boss à phases • combos • objectifs", getWidth() * 0.5f, getHeight() - 42f, p);
-        p.setFakeBoldText(false);
+        // Le menu principal affiche désormais une seule identité de version lisible.
     }
 
     private float sx(float worldX) {

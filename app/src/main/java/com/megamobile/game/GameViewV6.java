@@ -330,7 +330,7 @@ public class GameViewV6 extends GameViewFinal {
             drawMenuStats(canvas);
             return;
         }
-        if (!bool(fDead)) {
+        if (!bool(fDead) && !bool(fChoosing) && !bool(fPaused)) {
             drawRelics(canvas);
             drawV6Status(canvas);
         }
@@ -382,11 +382,9 @@ public class GameViewV6 extends GameViewFinal {
 
     private void drawMenuStats(Canvas canvas) {
         int w = getWidth(), h = getHeight();
+        float scale = Math.max(1f, Math.min(w / 420f, h / 820f));
         paintV6.setTextAlign(Paint.Align.CENTER);
-        paintV6.setTextSize(13f);
-        paintV6.setColor(Color.rgb(150, 175, 182));
-        canvas.drawText("V0.6 • événements • reliques • statistiques", w * 0.5f, h - 18f, paintV6);
-        paintV6.setTextSize(14f);
+        paintV6.setTextSize(14f * scale);
         paintV6.setColor(Color.rgb(190, 208, 212));
         canvas.drawText("Parties " + runs + "   •   Éliminations " + totalKills + "   •   Record temps " + formatTime(bestTime),
                 w * 0.5f, h * 0.43f, paintV6);

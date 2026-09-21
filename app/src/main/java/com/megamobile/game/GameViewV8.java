@@ -609,20 +609,13 @@ public class GameViewV8 extends GameViewV7Final {
         if (w <= 0 || h <= 0) return;
 
         if (inMenu()) {
-            p.setTextAlign(Paint.Align.CENTER);
-            p.setFakeBoldText(true);
-            p.setTextSize(18f);
-            p.setColor(Color.rgb(255, 207, 74));
-            canvas.drawText("MEGAMOBILE V0.8.0 • ASCENSION", w * 0.5f, h - 78f, p);
-            p.setFakeBoldText(false);
-            p.setTextSize(12f);
-            p.setColor(Color.rgb(170, 198, 203));
-            canvas.drawText("drones • évolutions • contrats • némésis • surcharge", w * 0.5f, h - 59f, p);
             return;
         }
 
+        if (bool(fDead) || bool(fChoosing) || bool(fPaused)) return;
+
         drawWorldFx(canvas, w, h);
-        if (!bool(fDead) && !bool(fChoosing)) drawV8Hud(canvas, w, h);
+        drawV8Hud(canvas, w, h);
     }
 
     private void drawWorldFx(Canvas c, int w, int h) {

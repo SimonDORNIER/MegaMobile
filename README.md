@@ -3,6 +3,23 @@
 MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
 ## Version actuelle
+**V1.1.0 — MOBILE WORLD**
+
+La V1.1.0 adapte l'interface aux téléphones modernes et transforme le terrain infini en carte évolutive à explorer.
+
+### Changements V1.1.0
+- interface tactile redimensionnée pour le Pixel 7a et les écrans portrait modernes ;
+- trois grands choix regroupés en bas de l'écran pour rester accessibles au pouce ;
+- joystick invisible tant que le joueur ne touche pas l'écran ;
+- boutons de menu agrandis et mieux espacés ;
+- coffres laissés au sol par les ennemis puis récupérés en se déplaçant dessus ;
+- armes garanties dans les coffres de boss ;
+- chance d'obtenir un coffre d'artefact sur une élite ;
+- animation d'ouverture annonçant la rareté classique, rare, épique ou légendaire ;
+- carte limitée qui s'agrandit après avoir terminé ses coffres, captures, caches, secrets et zones bonus ;
+- mini-carte et suivi de progression de chaque zone.
+
+## Version précédente
 **V1.0.2 — CONTRÔLES FLUIDES**
 
 La V1.0.2 conserve le déplacement du joueur après une sélection automatique et ajoute une icône propre à l'application Android.
@@ -12,7 +29,7 @@ La V1.0.2 conserve le déplacement du joueur après une sélection automatique e
 - le personnage reprend immédiatement sa trajectoire après la fermeture du choix ;
 - MegaMobile dispose maintenant de sa propre icône Android.
 
-## Version précédente
+## Historique
 **V1.0.1 — ENDLESS STABILITY**
 
 La V1.0.1 renforce les parties très longues sans modifier le principe du jeu : la difficulté continue de monter jusqu'à la mort.

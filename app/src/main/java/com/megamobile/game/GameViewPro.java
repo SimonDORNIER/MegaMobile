@@ -180,11 +180,12 @@ public class GameViewPro extends GameView {
     @SuppressWarnings("unchecked")
     private void drawRemoteSprites(Canvas canvas) throws Exception {
         if (skin == null || !skin.hasAnyBitmap() || fCamX == null || fEnemies == null) return;
+        float scale = Math.max(1f, Math.min(getWidth() / 420f, getHeight() / 820f));
         float camX = fCamX.getFloat(this), camY = fCamY.getFloat(this);
         float playerX = fPx.getFloat(this), playerY = fPy.getFloat(this);
         float anchorX = getWidth() * 0.5f, anchorY = getHeight() * 0.56f;
         canvas.save();
-        canvas.clipRect(0f, 172f, getWidth(), getHeight());
+        canvas.clipRect(0f, 250f * scale, getWidth(), getHeight());
         List<Object> gems = (List<Object>) fGems.get(this);
         if (gems != null && skin.gem != null) for (Object obj : gems) {
             bindGem(obj);

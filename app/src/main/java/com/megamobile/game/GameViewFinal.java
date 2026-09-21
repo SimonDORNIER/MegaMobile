@@ -257,8 +257,8 @@ public class GameViewFinal extends GameViewPro {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (!inMenu && !bool(fDead)) drawPickups(canvas);
-        if (!inMenu && !bool(fDead) && !bool(fChoosing)) {
+        if (!inMenu && !bool(fDead) && !bool(fChoosing) && !bool(fPaused)) drawPickups(canvas);
+        if (!inMenu && !bool(fDead) && !bool(fChoosing) && !bool(fPaused)) {
             drawBestScore(canvas);
             drawSpeedControl(canvas);
         }
@@ -288,32 +288,35 @@ public class GameViewFinal extends GameViewPro {
     }
 
     private void drawBestScore(Canvas canvas) {
+        float scale = uiScale();
         ui.setTextAlign(Paint.Align.RIGHT);
-        ui.setTextSize(12f);
+        ui.setTextSize(12f * scale);
         ui.setColor(Color.argb(150, 215, 230, 232));
-        canvas.drawText("RECORD " + bestScore, getWidth() - 20f, 185f, ui);
+        canvas.drawText("RECORD " + bestScore, getWidth() - 18f * scale, 190f * scale, ui);
     }
 
     private void drawSpeedControl(Canvas canvas) {
-        float w = 84f, h = 36f;
-        float left = getWidth() - w - 18f;
-        float top = 205f;
+        float scale = uiScale();
+        float w = 88f * scale, h = 42f * scale;
+        float left = getWidth() - w - 18f * scale;
+        float top = 205f * scale;
         speedRect.set(left, top, left + w, top + h);
         ui.setColor(Color.argb(170, 24, 35, 40));
-        canvas.drawRoundRect(speedRect, 12f, 12f, ui);
+        canvas.drawRoundRect(speedRect, 12f * scale, 12f * scale, ui);
         stroke.setColor(Color.argb(150, 120, 225, 240));
-        stroke.setStrokeWidth(2f);
-        canvas.drawRoundRect(speedRect, 12f, 12f, stroke);
+        stroke.setStrokeWidth(2f * scale);
+        canvas.drawRoundRect(speedRect, 12f * scale, 12f * scale, stroke);
         ui.setTextAlign(Paint.Align.CENTER);
         ui.setFakeBoldText(true);
-        ui.setTextSize(14f);
+        ui.setTextSize(15f * scale);
         ui.setColor(Color.WHITE);
-        canvas.drawText("×" + speedModes[speedModeIndex], speedRect.centerX(), speedRect.centerY() + 5f, ui);
+        canvas.drawText("×" + speedModes[speedModeIndex], speedRect.centerX(), speedRect.centerY() + 5f * scale, ui);
         ui.setFakeBoldText(false);
     }
 
     private void drawMainMenu(Canvas c) {
         int w = getWidth(), h = getHeight();
+        float scale = uiScale();
         ui.setColor(Color.rgb(8, 14, 18));
         c.drawRect(0, 0, w, h, ui);
         ui.setColor(Color.argb(36, 60, 210, 230));
@@ -324,34 +327,37 @@ public class GameViewFinal extends GameViewPro {
         ui.setTextAlign(Paint.Align.CENTER);
         ui.setFakeBoldText(true);
         ui.setColor(Color.WHITE);
-        ui.setTextSize(Math.min(48f, w * 0.115f));
+        ui.setTextSize(Math.min(48f * scale, w * 0.115f));
         c.drawText("MEGAMOBILE", w / 2f, h * 0.23f, ui);
-        ui.setTextSize(16f);
+        ui.setTextSize(16f * scale);
         ui.setColor(Color.rgb(130, 225, 235));
         c.drawText("SURVIS • ÉVOLUE • VA TOUJOURS PLUS LOIN", w / 2f, h * 0.27f, ui);
 
         ui.setFakeBoldText(false);
         ui.setColor(Color.rgb(205, 217, 220));
-        ui.setTextSize(15f);
+        ui.setTextSize(15f * scale);
         c.drawText("Portrait • commandes tactiles • mises à jour live", w / 2f, h * 0.34f, ui);
         c.drawText("Le joystick apparaît là où tu poses le pouce.", w / 2f, h * 0.38f, ui);
 
-        float margin = 42f;
+        float margin = 30f * scale;
         float top = h * 0.49f;
-        playRect.set(margin, top, w - margin, top + 78f);
+        playRect.set(margin, top, w - margin, top + 88f * scale);
         ui.setColor(Color.rgb(40, 166, 116));
-        c.drawRoundRect(playRect, 24f, 24f, ui);
-        stroke.setColor(Color.rgb(125, 245, 195)); stroke.setStrokeWidth(3f);
-        c.drawRoundRect(playRect, 24f, 24f, stroke);
-        ui.setFakeBoldText(true); ui.setColor(Color.WHITE); ui.setTextSize(25f);
-        c.drawText("JOUER", w / 2f, playRect.centerY() + 9f, ui);
+        c.drawRoundRect(playRect, 24f * scale, 24f * scale, ui);
+        stroke.setColor(Color.rgb(125, 245, 195)); stroke.setStrokeWidth(3f * scale);
+        c.drawRoundRect(playRect, 24f * scale, 24f * scale, stroke);
+        ui.setFakeBoldText(true); ui.setColor(Color.WHITE); ui.setTextSize(25f * scale);
+        c.drawText("JOUER", w / 2f, playRect.centerY() + 9f * scale, ui);
 
-        ui.setTextSize(17f); ui.setColor(Color.rgb(225, 230, 232));
-        c.drawText("Record : " + bestScore, w / 2f, top + 132f, ui);
-        ui.setFakeBoldText(false); ui.setTextSize(13f); ui.setColor(Color.rgb(150, 168, 172));
-        c.drawText("V0.5 • contenu et équilibrage récupérés depuis GitHub", w / 2f, h - 64f, ui);
-        c.drawText("Les mises à jour du moteur sont téléchargées automatiquement.", w / 2f, h - 40f, ui);
+        ui.setTextSize(17f * scale); ui.setColor(Color.rgb(225, 230, 232));
+        c.drawText("Record : " + bestScore, w / 2f, playRect.bottom + 44f * scale, ui);
+        ui.setFakeBoldText(false); ui.setTextSize(13f * scale); ui.setColor(Color.rgb(150, 168, 172));
+        c.drawText("V1.1 • exploration, coffres et carte évolutive", w / 2f, h - 42f * scale, ui);
         ui.setFakeBoldText(false);
+    }
+
+    private float uiScale() {
+        return Math.max(1f, Math.min(getWidth() / 420f, getHeight() / 820f));
     }
 
     @Override
