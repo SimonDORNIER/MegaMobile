@@ -6,6 +6,6 @@
     "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.3.0.part00.b64",
     "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.3.0.part01.b64"
   ],
-  "sha256": "c427aaa9459015346af49c6415e3c5145753dd3d830465f9f52dc829f527c492",
-  "note": "Royaume des ombres : thème médiéval, animations améliorées, armes réservées aux boss et mini-boss"
+  "sha256": "515339b36d7a72a916d5dd79a45053c2291a71190195cda54b4442dde77b7333",
+  "note": "Correctif boucle de mise à jour : version Android code 17 cohérente"
 }
