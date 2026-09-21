@@ -164,12 +164,9 @@ public class GameViewPro extends GameView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (modalOpen()) return;
-        try { drawRemoteSprites(canvas); } catch (Exception ignored) { }
-        if (System.currentTimeMillis() < skinBadgeUntil && skinBadge != null && !skinBadge.isEmpty()) {
-            badgePaint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText(skinBadge, 18f, getHeight() - 18f, badgePaint);
-        }
+        // La direction artistique médiévale est désormais rendue par le moteur
+        // lui-même : cela évite que d'anciens sprites live génériques recouvrent
+        // les personnages, les animations et les couleurs de la nouvelle version.
     }
 
     @SuppressWarnings("unchecked")

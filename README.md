@@ -3,6 +3,17 @@
 MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
 ## Version actuelle
+**V1.3.0 — ROYAUME DES OMBRES**
+
+La V1.3.0 transforme MegaMobile en survival médiéval sombre : le joueur est le seigneur des ombres et les ennemis sont les héros venus reprendre le royaume.
+
+### Changements V1.3.0
+- fond en dalles de château, personnages armurés, capes, cornes, boucliers et animations de flottement ;
+- mini-boss champions ajoutés avec coffre d’arme garanti ;
+- armes et améliorations d’armes disponibles exclusivement sur les mini-boss et boss ;
+- niveaux et coffres classiques limités aux statistiques générales et aux soins ;
+- menu principal et palette remaniés pour le thème médiéval.
+
 **V1.2.0 — SYNERGIES**
 
 La V1.2.0 libère l'espace de jeu, généralise les synergies de build et améliore les révélations de récompenses.
