@@ -1,11 +1,11 @@
 {
-  "versionCode": 15,
-  "versionName": "1.1.0",
+  "versionCode": 16,
+  "versionName": "1.2.0",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.1.0.part00.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.1.0.part01.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.2.0.part00.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.2.0.part01.b64"
   ],
-  "sha256": "5e3445f568b3824d78920c9ab1c8d87f3f545a1491b2eddcbc35ada1a64448d3",
-  "note": "Interface mobile adaptée, coffres avec raretés et carte évolutive à explorer."
+  "sha256": "5a91340f6a1c8673d8b2424cf766265adc6c40cdaac522f6e942a62ab300959c",
+  "note": "HUD compact, dash retiré, synergies d'armes et sélection automatique dans la pause."
 }
