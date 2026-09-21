@@ -19,7 +19,7 @@ public class GameViewPro extends GameView {
     private long skinBadgeUntil = 0L;
 
     private Field fJoystickPointer, fJoyStartX, fJoyStartY, fJoyX, fJoyY, fJoyRadius, fMoveX, fMoveY;
-    private Field fPaused, fDead, fChoosing, fDashRect, fPauseRect, fAutoRect;
+    private Field fPaused, fDead, fChoosing, fPauseRect, fAutoRect;
     private Field fCamX, fCamY, fPx, fPy, fEnemies, fGems, fChests;
     private Field enemyType, enemyX, enemyY, enemyR;
     private Class<?> enemyClass;
@@ -57,7 +57,6 @@ public class GameViewPro extends GameView {
             fPaused = field("paused");
             fDead = field("dead");
             fChoosing = field("choosing");
-            fDashRect = field("dashRect");
             fPauseRect = field("pauseRect");
             fAutoRect = field("autoRect");
             fCamX = field("camX");
@@ -94,13 +93,9 @@ public class GameViewPro extends GameView {
         if (r != null && r.contains(x, y)) return true;
         r = rect(fAutoRect);
         if (r != null && r.contains(x, y)) return true;
-        r = rect(fDashRect);
-        if (r != null && r.contains(x, y)) return true;
         int w = getWidth(), h = getHeight();
         if (x > w - 100f && y < 100f) return true;
-        if (x > w - 155f && y > 105f && y < 205f) return true;
-        float dx = x - (w - 90f), dy = y - (h - 100f);
-        return dx * dx + dy * dy < 105f * 105f;
+        return false;
     }
 
     @Override
@@ -214,12 +209,6 @@ public class GameViewPro extends GameView {
         if (skin.player != null) drawBitmapCentered(canvas, skin.player,
                 playerX - camX + anchorX, playerY - camY + anchorY - 3f, 60f, 60f);
         canvas.restore();
-        RectF dash = rect(fDashRect);
-        if (dash != null && !dash.isEmpty()) {
-            skinPaint.setStyle(Paint.Style.STROKE); skinPaint.setStrokeWidth(3f);
-            skinPaint.setColor(Color.argb(190, 210, 250, 255));
-            canvas.drawOval(dash, skinPaint); skinPaint.setStyle(Paint.Style.FILL);
-        }
     }
 
     private void bindEnemy(Object obj) throws Exception {

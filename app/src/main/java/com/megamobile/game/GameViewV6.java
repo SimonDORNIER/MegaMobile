@@ -41,7 +41,7 @@ public class GameViewV6 extends GameViewFinal {
     private final ToneGenerator tones;
     private final Vibrator vibrator;
 
-    private Field fElapsed, fKills, fScore, fHp, fMaxHp, fDamage, fFireInterval, fSpeed, fInvuln;
+    private Field fElapsed, fKills, fScore, fHp, fMaxHp, fDamage, fWeaponHaste, fSpeed, fInvuln;
     private Field fPaused, fDead, fChoosing, fEnemies, fPx, fPy, fCamX, fCamY;
     private Field fInMenu;
     private Method mSpawnEnemy, mShowBanner, mGainXp;
@@ -85,7 +85,7 @@ public class GameViewV6 extends GameViewFinal {
             fHp = baseField("hp");
             fMaxHp = baseField("maxHp");
             fDamage = baseField("damage");
-            fFireInterval = baseField("fireInterval");
+            fWeaponHaste = baseField("weaponHaste");
             fSpeed = baseField("speed");
             fInvuln = baseField("invuln");
             fPaused = baseField("paused");
@@ -234,7 +234,7 @@ public class GameViewV6 extends GameViewFinal {
         try {
             if (!frenzyActive) {
                 if (fDamage != null) fDamage.setFloat(this, number(fDamage) * 1.32f);
-                if (fFireInterval != null) fFireInterval.setFloat(this, Math.max(0.07f, number(fFireInterval) / 1.28f));
+                if (fWeaponHaste != null) fWeaponHaste.setFloat(this, Math.min(8f, number(fWeaponHaste) * 1.28f));
                 if (fSpeed != null) fSpeed.setFloat(this, number(fSpeed) * 1.10f);
                 frenzyActive = true;
             }
@@ -246,7 +246,7 @@ public class GameViewV6 extends GameViewFinal {
         try {
             if (!frenzyActive) return;
             if (fDamage != null) fDamage.setFloat(this, number(fDamage) / 1.32f);
-            if (fFireInterval != null) fFireInterval.setFloat(this, number(fFireInterval) * 1.28f);
+            if (fWeaponHaste != null) fWeaponHaste.setFloat(this, Math.max(1f, number(fWeaponHaste) / 1.28f));
             if (fSpeed != null) fSpeed.setFloat(this, number(fSpeed) / 1.10f);
             frenzyActive = false;
             frenzyTimer = 0f;
@@ -364,12 +364,13 @@ public class GameViewV6 extends GameViewFinal {
 
     private void drawV6Status(Canvas canvas) {
         if (eventLabelLife > 0f) {
+            float scale = Math.min(1.22f, Math.max(1f, Math.min(getWidth() / 420f, getHeight() / 820f)));
             float alpha = Math.min(1f, eventLabelLife * 1.4f);
             paintV6.setTextAlign(Paint.Align.CENTER);
             paintV6.setFakeBoldText(true);
-            paintV6.setTextSize(15f);
+            paintV6.setTextSize(10f * scale);
             paintV6.setColor(Color.argb((int) (220f * alpha), 235, 245, 248));
-            canvas.drawText(eventLabel, getWidth() * 0.5f, 205f, paintV6);
+            canvas.drawText(eventLabel, getWidth() * 0.5f, 192f * scale, paintV6);
             paintV6.setFakeBoldText(false);
         }
         if (frenzyActive) {
