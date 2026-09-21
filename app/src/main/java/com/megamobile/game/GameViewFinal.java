@@ -4,8 +4,12 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RadialGradient;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 
@@ -38,6 +42,7 @@ public class GameViewFinal extends GameViewPro {
     private boolean inMenu = true;
     private int bestScore;
     private float pickupTimer = 22f;
+    private float extraSimulationDebt;
     private long lastExtraMs;
     private boolean deathStored;
     private final int[] speedModes = {1, 2, 4, 10, 100};
@@ -133,16 +138,23 @@ public class GameViewFinal extends GameViewPro {
 
     private void runExtraSimulation(float realDt) {
         int multiplier = speedModes[speedModeIndex];
-        if (multiplier <= 1 || realDt <= 0f || bool(fPaused) || bool(fDead) || bool(fChoosing)) return;
+        if (multiplier <= 1 || realDt <= 0f || bool(fPaused) || bool(fDead) || bool(fChoosing)) {
+            extraSimulationDebt = 0f;
+            return;
+        }
         if (mUpdate == null || mUpdateVisuals == null) return;
-        float extra = realDt * (multiplier - 1f);
-        int steps = Math.min(12, Math.max(1, (int) Math.ceil(extra / 0.04f)));
-        float step = extra / steps;
+        // Le mode ×100 utilisait auparavant de très grands pas de temps : les
+        // collisions étaient sautées et la partie pouvait se figer. On borne la
+        // dette et on la découpe en pas assez petits pour rester déterministe.
+        extraSimulationDebt = Math.min(1.8f, extraSimulationDebt + realDt * (multiplier - 1f));
+        int steps = Math.min(24, Math.max(1, (int) Math.ceil(extraSimulationDebt / 0.075f)));
+        float step = Math.min(0.075f, extraSimulationDebt / steps);
         try {
             for (int i = 0; i < steps; i++) {
                 if (bool(fDead) || bool(fPaused) || bool(fChoosing)) break;
                 mUpdate.invoke(this, step);
                 mUpdateVisuals.invoke(this, step);
+                extraSimulationDebt = Math.max(0f, extraSimulationDebt - step);
             }
             invalidate();
         } catch (Exception ignored) { }
@@ -215,12 +227,7 @@ public class GameViewFinal extends GameViewPro {
                 }
                 banner("AIMANT ! " + count + " gemmes");
             } else if (type == PICKUP_NUKE) {
-                List<Object> enemies = fEnemies == null ? null : (List<Object>) fEnemies.get(this);
-                int count = enemies == null ? 0 : enemies.size();
-                if (enemies != null) enemies.clear();
-                if (fKills != null) fKills.setInt(this, integer(fKills) + count);
-                if (fScore != null) fScore.setInt(this, integer(fScore) + count * 12);
-                if (mGainXp != null && count > 0) mGainXp.invoke(this, Math.min(55f, count * 0.55f));
+                int count = destroyAllEnemies();
                 banner("NUKE ! " + count + " ennemis");
             } else if (type == PICKUP_ULTRA) {
                 if (fDamage != null) fDamage.setFloat(this, number(fDamage) * 1.22f);
@@ -266,21 +273,20 @@ public class GameViewFinal extends GameViewPro {
     }
 
     private void drawPickups(Canvas canvas) {
-        float camX = number(fCamX), camY = number(fCamY);
-        float anchorX = getWidth() * 0.5f, anchorY = getHeight() * 0.56f;
         float t = number(fElapsed);
+        float zoom = getCameraZoom();
         for (SpecialPickup p : pickups) {
-            float sx = p.x - camX + anchorX;
-            float sy = p.y - camY + anchorY;
+            float sx = worldToScreenX(p.x);
+            float sy = worldToScreenY(p.y);
             float pulse = 1f + (float) Math.sin(t * 5.5f + p.x * 0.01f) * 0.08f;
             int color = p.type == PICKUP_MAGNET ? Color.rgb(80, 210, 255)
                     : p.type == PICKUP_NUKE ? Color.rgb(255, 105, 65)
                     : p.type == PICKUP_ULTRA ? Color.rgb(245, 90, 255)
                     : Color.rgb(95, 235, 130);
             ui.setColor(Color.argb(50, Color.red(color), Color.green(color), Color.blue(color)));
-            canvas.drawCircle(sx, sy, 42f * pulse, ui);
+            canvas.drawCircle(sx, sy, 42f * pulse * zoom, ui);
             stroke.setColor(color); stroke.setStrokeWidth(4f);
-            canvas.drawCircle(sx, sy, 25f * pulse, stroke);
+            canvas.drawCircle(sx, sy, 25f * pulse * zoom, stroke);
             ui.setColor(color); ui.setTextAlign(Paint.Align.CENTER); ui.setFakeBoldText(true); ui.setTextSize(17f);
             canvas.drawText(p.type == PICKUP_MAGNET ? "M" : p.type == PICKUP_NUKE ? "N" : p.type == PICKUP_ULTRA ? "U" : "+", sx, sy + 6f, ui);
             ui.setFakeBoldText(false);
@@ -319,43 +325,106 @@ public class GameViewFinal extends GameViewPro {
     private void drawMainMenu(Canvas c) {
         int w = getWidth(), h = getHeight();
         float scale = uiScale();
-        ui.setColor(Color.rgb(12, 8, 18));
+        ui.setShader(new LinearGradient(0f, 0f, 0f, h,
+                Color.rgb(29, 13, 40), Color.rgb(7, 7, 13), Shader.TileMode.CLAMP));
         c.drawRect(0, 0, w, h, ui);
-        ui.setColor(Color.argb(48, 132, 44, 145));
-        c.drawCircle(w * 0.18f, h * 0.20f, w * 0.42f, ui);
-        ui.setColor(Color.argb(34, 220, 151, 58));
-        c.drawCircle(w * 0.92f, h * 0.48f, w * 0.55f, ui);
+        ui.setShader(new RadialGradient(w * 0.5f, h * 0.30f, w * 0.55f,
+                Color.argb(105, 123, 45, 146), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, w, h * 0.7f, ui);
+        ui.setShader(null);
+
+        // Lune, remparts et sigil du royaume : identité visuelle sans image
+        // externe, donc nette sur toutes les résolutions.
+        ui.setColor(Color.argb(160, 224, 203, 155));
+        c.drawCircle(w * 0.79f, h * 0.18f, 37f * scale, ui);
+        ui.setColor(Color.rgb(8, 8, 14));
+        c.drawCircle(w * 0.81f, h * 0.17f, 34f * scale, ui);
+        stroke.setColor(Color.argb(115, 204, 123, 226));
+        stroke.setStrokeWidth(2f * scale);
+        c.drawCircle(w * 0.5f, h * 0.30f, 74f * scale, stroke);
+        c.drawCircle(w * 0.5f, h * 0.30f, 57f * scale, stroke);
+        c.save();
+        c.rotate(45f, w * 0.5f, h * 0.30f);
+        c.drawRect(w * 0.5f - 38f * scale, h * 0.30f - 38f * scale,
+                w * 0.5f + 38f * scale, h * 0.30f + 38f * scale, stroke);
+        c.restore();
+        drawMenuShadowLord(c, w * 0.5f, h * 0.30f, scale);
+
+        ui.setColor(Color.rgb(10, 9, 15));
+        float castleTop = h * 0.81f;
+        c.drawRect(0f, castleTop, w, h, ui);
+        for (int i = 0; i < 7; i++) {
+            float x = i * w / 6f - 18f * scale;
+            float towerH = (i % 2 == 0 ? 74f : 48f) * scale;
+            c.drawRect(x, castleTop - towerH, x + 42f * scale, castleTop, ui);
+            for (int j = 0; j < 3; j++) {
+                c.drawRect(x + j * 15f * scale, castleTop - towerH - 10f * scale,
+                        x + (j * 15f + 9f) * scale, castleTop - towerH, ui);
+            }
+        }
 
         ui.setTextAlign(Paint.Align.CENTER);
         ui.setFakeBoldText(true);
         ui.setColor(Color.rgb(243, 222, 183));
-        ui.setTextSize(Math.min(48f * scale, w * 0.115f));
-        c.drawText("MEGAMOBILE", w / 2f, h * 0.23f, ui);
-        ui.setTextSize(16f * scale);
-        ui.setColor(Color.rgb(205, 88, 93));
-        c.drawText("LE SEIGNEUR DES OMBRES", w / 2f, h * 0.27f, ui);
+        ui.setTextSize(Math.min(42f * scale, w * 0.11f));
+        c.drawText("MEGAMOBILE", w / 2f, h * 0.115f, ui);
+        ui.setTextSize(13f * scale);
+        ui.setColor(Color.rgb(221, 112, 104));
+        c.drawText("LE RÈGNE DES OMBRES", w / 2f, h * 0.15f, ui);
 
         ui.setFakeBoldText(false);
-        ui.setColor(Color.rgb(205, 217, 220));
-        ui.setTextSize(15f * scale);
-        c.drawText("Affronte les héros • conquiers leurs royaumes", w / 2f, h * 0.34f, ui);
-        c.drawText("Le joystick apparaît là où tu poses le pouce.", w / 2f, h * 0.38f, ui);
+        ui.setColor(Color.rgb(213, 216, 224));
+        ui.setTextSize(14f * scale);
+        c.drawText("Tu es le boss. Les héros viennent te renverser.", w / 2f, h * 0.395f, ui);
 
         float margin = 30f * scale;
-        float top = h * 0.49f;
+        float top = h * 0.51f;
         playRect.set(margin, top, w - margin, top + 88f * scale);
-        ui.setColor(Color.rgb(86, 28, 92));
+        ui.setShader(new LinearGradient(playRect.left, playRect.top, playRect.right, playRect.bottom,
+                Color.rgb(118, 42, 132), Color.rgb(63, 23, 78), Shader.TileMode.CLAMP));
         c.drawRoundRect(playRect, 24f * scale, 24f * scale, ui);
+        ui.setShader(null);
         stroke.setColor(Color.rgb(220, 145, 76)); stroke.setStrokeWidth(3f * scale);
         c.drawRoundRect(playRect, 24f * scale, 24f * scale, stroke);
         ui.setFakeBoldText(true); ui.setColor(Color.WHITE); ui.setTextSize(25f * scale);
-        c.drawText("JOUER", w / 2f, playRect.centerY() + 9f * scale, ui);
+        c.drawText("COMMENCER LA CONQUÊTE", w / 2f, playRect.centerY() + 9f * scale, ui);
 
-        ui.setTextSize(17f * scale); ui.setColor(Color.rgb(225, 230, 232));
-        c.drawText("Record : " + bestScore, w / 2f, playRect.bottom + 44f * scale, ui);
-        ui.setFakeBoldText(false); ui.setTextSize(13f * scale); ui.setColor(Color.rgb(150, 168, 172));
-        c.drawText("V1.3 • ROYAUME DES OMBRES", w / 2f, h - 42f * scale, ui);
+        ui.setTextSize(11f * scale);
+        ui.setColor(Color.rgb(194, 181, 205));
+        c.drawText("PARTIE INFINIE   •   AUCUN ACHAT   •   HORS-LIGNE",
+                w / 2f, playRect.bottom + 31f * scale, ui);
+        ui.setTextSize(16f * scale); ui.setColor(Color.rgb(235, 225, 211));
+        c.drawText("Record : " + bestScore, w / 2f, playRect.bottom + 63f * scale, ui);
+        ui.setFakeBoldText(false); ui.setTextSize(12f * scale); ui.setColor(Color.rgb(151, 143, 164));
+        c.drawText("V1.4 • CONQUÊTE", w / 2f, h - 36f * scale, ui);
         ui.setFakeBoldText(false);
+    }
+
+    private void drawMenuShadowLord(Canvas c, float cx, float cy, float scale) {
+        ui.setColor(Color.argb(130, 0, 0, 0));
+        c.drawOval(cx - 37f * scale, cy + 42f * scale, cx + 37f * scale, cy + 58f * scale, ui);
+        Path cape = new Path();
+        cape.moveTo(cx - 22f * scale, cy - 3f * scale);
+        cape.lineTo(cx - 48f * scale, cy + 53f * scale);
+        cape.lineTo(cx + 48f * scale, cy + 53f * scale);
+        cape.lineTo(cx + 22f * scale, cy - 3f * scale);
+        cape.close();
+        ui.setColor(Color.rgb(64, 19, 78));
+        c.drawPath(cape, ui);
+        ui.setColor(Color.rgb(29, 27, 39));
+        c.drawRoundRect(cx - 25f * scale, cy - 10f * scale, cx + 25f * scale,
+                cy + 39f * scale, 13f * scale, 13f * scale, ui);
+        ui.setColor(Color.rgb(16, 14, 23));
+        c.drawCircle(cx, cy - 20f * scale, 27f * scale, ui);
+        ui.setColor(Color.rgb(255, 61, 76));
+        c.drawCircle(cx - 8f * scale, cy - 20f * scale, 3.5f * scale, ui);
+        c.drawCircle(cx + 8f * scale, cy - 20f * scale, 3.5f * scale, ui);
+        stroke.setStrokeCap(Paint.Cap.ROUND);
+        stroke.setStrokeWidth(7f * scale);
+        stroke.setColor(Color.rgb(215, 157, 76));
+        c.drawLine(cx - 18f * scale, cy - 38f * scale, cx - 34f * scale, cy - 58f * scale, stroke);
+        c.drawLine(cx + 18f * scale, cy - 38f * scale, cx + 34f * scale, cy - 58f * scale, stroke);
+        stroke.setStrokeCap(Paint.Cap.BUTT);
     }
 
     private float uiScale() {
@@ -384,6 +453,12 @@ public class GameViewFinal extends GameViewPro {
             return true;
         }
         return super.onTouchEvent(event);
+    }
+
+    @Override
+    public boolean handleBackPressed() {
+        if (inMenu) return false;
+        return super.handleBackPressed();
     }
 
     private static final class SpecialPickup {

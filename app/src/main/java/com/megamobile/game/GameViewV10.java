@@ -22,7 +22,7 @@ public class GameViewV10 extends GameViewV8 {
     private final Paint p10 = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint s10 = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fRange, fWeaponHaste, fInvuln;
+    private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fRange, fWeaponHaste, fVoid, fInvuln;
     private Field fPaused, fDead, fChoosing, fEnemies, fInMenu;
     private Method mSpawnEnemy, mGainXp, mDamageEnemy, mShowBanner;
 
@@ -38,6 +38,7 @@ public class GameViewV10 extends GameViewV8 {
     private float voidFx;
     private float cataclysmCd = 145f;
     private int milestoneRank;
+    private int announcedVoidLevel;
     private boolean lastStandUsed;
     private float statusLife;
     private String statusText = "";
@@ -62,6 +63,7 @@ public class GameViewV10 extends GameViewV8 {
             fDamage = baseField("damage");
             fRange = baseField("range");
             fWeaponHaste = baseField("weaponHaste");
+            fVoid = baseField("voidLevel");
             fInvuln = baseField("invuln");
             fPaused = baseField("paused");
             fDead = baseField("dead");
@@ -163,6 +165,7 @@ public class GameViewV10 extends GameViewV8 {
         voidFx = 0f;
         cataclysmCd = 145f;
         milestoneRank = 0;
+        announcedVoidLevel = 0;
         lastStandUsed = false;
         lastKills10 = integer(fKills);
         statusLife = 2.6f;
@@ -214,16 +217,17 @@ public class GameViewV10 extends GameViewV8 {
 
     private void updateVoidPulse(float dt) {
         int level = integer(fLevel);
-        if (level < 28) return;
+        int voidLevel = integer(fVoid);
+        if (voidLevel <= 0) return;
         voidCd -= dt;
         if (voidCd > 0f) return;
         float haste = Math.max(1f, number(fWeaponHaste));
-        voidCd = Math.max(1.15f, Math.max(3.4f, 7.2f - level * 0.045f) / haste);
+        voidCd = Math.max(0.85f, Math.max(2.7f, 7.2f - voidLevel * 0.62f) / haste);
 
         float px = baseFloat("px"), py = baseFloat("py");
         float areaScale = 1f + Math.max(0f, number(fRange) / 420f - 1f) * 0.65f;
-        float radius = Math.min(720f, (250f + level * 3.0f) * areaScale);
-        float dmg = number(fDamage) * (1.85f + Math.min(2.0f, level * 0.025f));
+        float radius = Math.min(720f, (225f + voidLevel * 42f + level * 1.2f) * areaScale);
+        float dmg = number(fDamage) * (1.35f + voidLevel * 0.43f + Math.min(0.8f, level * 0.01f));
         int hits = 0;
         for (Object e : snapshotEnemies10()) {
             float ex = enemyFloat(e, "x"), ey = enemyFloat(e, "y");
@@ -236,7 +240,10 @@ public class GameViewV10 extends GameViewV8 {
         if (hits > 0) {
             voidFx = 0.42f;
             addScore(hits * 3);
-            if (level == 28) banner("ARME ÉVEILLÉE : IMPULSION DU VIDE");
+            if (announcedVoidLevel == 0) {
+                announcedVoidLevel = voidLevel;
+                banner("ARME ÉVEILLÉE : IMPULSION DU VIDE");
+            }
         }
     }
 

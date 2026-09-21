@@ -182,7 +182,7 @@ public class GameViewV101 extends GameViewV10 {
         if (enemies.isEmpty()) return;
 
         float px = number(fPx), py = number(fPy);
-        float viewport = Math.max(getWidth(), getHeight());
+        float viewport = Math.max(getWidth(), getHeight()) / Math.max(0.62f, getCameraZoom());
         float lostRadius = Math.max(1250f, viewport * 1.45f);
         float returnRadius = Math.max(560f, viewport * 0.64f + 120f);
         float lostSq = lostRadius * lostRadius;
@@ -323,6 +323,6 @@ public class GameViewV101 extends GameViewV10 {
         patchPaint.setTextAlign(Paint.Align.LEFT);
         patchPaint.setTextSize(11f * scale);
         patchPaint.setColor(Color.argb((int) (180f * Math.min(1f, versionLabelLife)), 178, 220, 225));
-        canvas.drawText("V1.2.0 • SYNERGIES", 18f * scale, getHeight() - 18f * scale, patchPaint);
+        canvas.drawText("V1.4.0 • CONQUÊTE", 18f * scale, getHeight() - 18f * scale, patchPaint);
     }
 }
