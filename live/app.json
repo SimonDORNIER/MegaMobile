@@ -1,11 +1,11 @@
 {
-  "versionCode": 14,
-  "versionName": "1.0.2",
+  "versionCode": 15,
+  "versionName": "1.1.0",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.2.part00.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.0.2.part01.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.1.0.part00.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.1.0.part01.b64"
   ],
-  "sha256": "1d999ae6b59b6d4d6df286d53ab19be825317045fecd5323d21cb061a1bdcbac",
-  "note": "Le joystick reste actif après une sélection automatique et MegaMobile possède maintenant sa propre icône Android."
+  "sha256": "5e3445f568b3824d78920c9ab1c8d87f3f545a1491b2eddcbc35ada1a64448d3",
+  "note": "Interface mobile adaptée, coffres avec raretés et carte évolutive à explorer."
 }
