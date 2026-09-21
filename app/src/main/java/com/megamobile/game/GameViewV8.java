@@ -24,7 +24,7 @@ public class GameViewV8 extends GameViewV7Final {
     private final Random rng = new Random();
 
     private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fSpeed;
-    private Field fRegen, fCrit, fMulti, fRange, fWeaponHaste, fAura, fOrbit, fLightning, fRocket, fEnemies;
+    private Field fRegen, fCrit, fMulti, fRange, fWeaponHaste, fAura, fOrbit, fLightning, fRocket, fDrone, fEnemies;
     private Field fPx, fPy, fPaused, fDead, fChoosing, fInvuln, fInMenu;
     private Method mSpawnEnemy, mGainXp, mDamageEnemy, mShowBanner;
 
@@ -49,7 +49,6 @@ public class GameViewV8 extends GameViewV7Final {
 
     private int droneTier;
     private float droneCd;
-    private float novaCd = 5.5f;
     private float evolutionCdA, evolutionCdB, evolutionCdC, evolutionCdD;
 
     private boolean solarHalo;
@@ -96,6 +95,7 @@ public class GameViewV8 extends GameViewV7Final {
             fOrbit = baseField("orbitLevel");
             fLightning = baseField("lightningLevel");
             fRocket = baseField("rocketLevel");
+            fDrone = baseField("droneLevel");
             fEnemies = baseField("enemies");
             fPx = baseField("px");
             fPy = baseField("py");
@@ -224,7 +224,6 @@ public class GameViewV8 extends GameViewV7Final {
         nextContract = 34f;
         droneTier = 0;
         droneCd = 0.7f;
-        novaCd = 5.5f;
         evolutionCdA = evolutionCdB = evolutionCdC = evolutionCdD = 0f;
         solarHalo = bladeVortex = stormCore = siegeSwarm = false;
         nemesis = null;
@@ -262,8 +261,7 @@ public class GameViewV8 extends GameViewV7Final {
     }
 
     private void updateDrones(float dt) {
-        int level = integer(fLevel);
-        int wanted = level >= 34 ? 4 : level >= 24 ? 3 : level >= 14 ? 2 : level >= 7 ? 1 : 0;
+        int wanted = Math.min(6, integer(fDrone));
         if (wanted > droneTier) {
             droneTier = wanted;
             banner(droneTier == 1 ? "NOUVELLE ARME : DRONE" : "DRONES ×" + droneTier);
@@ -307,14 +305,6 @@ public class GameViewV8 extends GameViewV7Final {
         if (!siegeSwarm && rocket >= 4 && integer(fMulti) >= 3) {
             siegeSwarm = true;
             banner("ÉVOLUTION : ESSAIM DE SIÈGE");
-        }
-
-        if (integer(fLevel) >= 12) {
-            novaCd -= dt;
-            if (novaCd <= 0f) {
-                novaCd = Math.max(1.0f, Math.max(2.7f, 6.0f - integer(fLevel) * 0.055f) / haste());
-                novaBlast((145f + integer(fLevel) * 2.2f) * areaScale(), number(fDamage) * 0.72f, Color.rgb(116, 227, 170));
-            }
         }
 
         if (solarHalo) {
@@ -633,7 +623,9 @@ public class GameViewV8 extends GameViewV7Final {
         float camX = readBase("camX"), camY = readBase("camY");
         float anchorX = w * 0.5f, anchorY = h * 0.56f;
         c.save();
-        c.translate(anchorX - camX, anchorY - camY);
+        c.translate(anchorX, anchorY);
+        c.scale(getCameraZoom(), getCameraZoom());
+        c.translate(-camX, -camY);
 
         for (PulseFx fx : pulses) {
             float alpha = Math.max(0f, fx.life / fx.maxLife);

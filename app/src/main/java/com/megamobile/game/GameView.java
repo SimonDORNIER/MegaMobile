@@ -1,8 +1,10 @@
 package com.megamobile.game;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
@@ -21,6 +23,9 @@ import java.util.Locale;
 import java.util.Random;
 
 public class GameView extends View implements Choreographer.FrameCallback {
+    private static final String SETTINGS = "MegaMobileSettings";
+    private static final String SETTING_AUTO_CHOICE = "autoChoice";
+    private static final String SETTING_EFFECTS = "soundAndHaptics";
     private static final int ENEMY_GRUNT = 0;
     private static final int ENEMY_FAST = 1;
     private static final int ENEMY_TANK = 2;
@@ -50,6 +55,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Random random = new Random();
     private final RemoteConfig remote = new RemoteConfig();
+    private final SharedPreferences settings;
 
     private final ArrayList<Enemy> enemies = new ArrayList<>();
     private final ArrayList<Shot> shots = new ArrayList<>();
@@ -101,6 +107,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private int orbitLevel;
     private int lightningLevel;
     private int rocketLevel;
+    private int droneLevel;
+    private int voidLevel;
     private float auraCd;
     private float lightningCd;
     private float rocketCd;
@@ -117,6 +125,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private float lastMoveY = -1f;
     private float camX;
     private float camY;
+    private float cameraZoom = 1f;
+    private float tutorialLife = 7.5f;
 
     private boolean worldReady;
     private int worldStage = 1;
@@ -150,6 +160,9 @@ public class GameView extends View implements Choreographer.FrameCallback {
 
     public GameView(Context context) {
         super(context);
+        settings = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE);
+        autoChoice = settings.getBoolean(SETTING_AUTO_CHOICE, false);
+        soundOn = settings.getBoolean(SETTING_EFFECTS, true);
         setFocusable(true);
         setKeepScreenOn(true);
         paint.setTypeface(android.graphics.Typeface.create("sans", android.graphics.Typeface.NORMAL));
@@ -219,7 +232,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         level = 1;
         xp = 0f;
         nextXp = 12f;
-        auraLevel = orbitLevel = lightningLevel = rocketLevel = 0;
+        auraLevel = orbitLevel = lightningLevel = rocketLevel = droneLevel = voidLevel = 0;
         auraCd = lightningCd = rocketCd = 0f;
         invuln = 0f;
         artifactCrownLevel = artifactWardLevel = artifactCompassLevel = artifactHourglassLevel = 0;
@@ -227,6 +240,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
         lastMoveX = 0f;
         lastMoveY = -1f;
         camX = camY = 0f;
+        cameraZoom = 1f;
+        tutorialLife = 7.5f;
         worldReady = false;
         worldStage = 1;
         worldRadius = 0f;
@@ -267,6 +282,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         difficulty = 1f + elapsed / Math.max(25f, remote.difficultySeconds)
                 + (float) Math.pow(elapsed / 360f, 1.35) * 0.7f;
         if (bannerLife > 0f) bannerLife -= dt;
+        if (tutorialLife > 0f) tutorialLife -= dt;
         if (invuln > 0f) invuln -= dt;
         if (regen > 0f && hp > 0f) hp = Math.min(maxHp, hp + regen * dt);
 
@@ -291,6 +307,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
         float cameraBlend = 1f - (float) Math.pow(0.001, dt);
         camX += (desiredCamX - camX) * cameraBlend;
         camY += (desiredCamY - camY) * cameraBlend;
+        // Plus la partie dure et plus le champ de bataille s'ouvre. Le zoom
+        // reste progressif pour ne jamais désorienter le joueur.
+        float timeZoom = Math.min(0.34f, elapsed / 720f * 0.34f);
+        float crowdZoom = Math.min(0.07f, Math.max(0, enemies.size() - 72) * 0.0012f);
+        float targetZoom = Math.max(0.62f, 1f - timeZoom - crowdZoom);
+        cameraZoom += (targetZoom - cameraZoom) * (1f - (float) Math.pow(0.02, dt));
 
         spawnCd -= dt;
         int dynamicCap = Math.min(remote.enemyCap, 48 + (int) (elapsed * 0.9f));
@@ -556,6 +578,31 @@ public class GameView extends View implements Choreographer.FrameCallback {
         }
     }
 
+    /** Détruit proprement la horde en conservant XP, score et coffres de boss. */
+    protected final int destroyAllEnemies() {
+        ArrayList<Enemy> snapshot = new ArrayList<>(enemies);
+        for (Enemy enemy : snapshot) {
+            if (enemy.hp > 0f) damageEnemy(enemy, enemy.maxHp * 2f + 1f, false);
+        }
+        return snapshot.size();
+    }
+
+    protected final boolean isSoundEnabled() {
+        return soundOn;
+    }
+
+    protected final float getCameraZoom() {
+        return cameraZoom;
+    }
+
+    protected final float worldToScreenX(float worldX) {
+        return (worldX - camX) * cameraZoom + getWidth() * 0.5f;
+    }
+
+    protected final float worldToScreenY(float worldY) {
+        return (worldY - camY) * cameraZoom + getHeight() * 0.56f;
+    }
+
     private void updateVisuals(float dt) {
         for (int i = particles.size() - 1; i >= 0; i--) {
             Particle p = particles.get(i);
@@ -579,11 +626,11 @@ public class GameView extends View implements Choreographer.FrameCallback {
         }
         if (chestRevealing) {
             chestRevealTime += dt;
-            if (chestRevealTime >= 2.05f) finishChestReveal();
+            if (chestRevealTime >= (autoChoice ? 0.72f : 1.72f)) finishChestReveal();
         }
         if (levelRevealing) {
             levelRevealTime += dt;
-            if (levelRevealTime >= 0.72f) finishLevelReveal();
+            if (levelRevealTime >= (autoChoice ? 0.22f : 0.56f)) finishLevelReveal();
         }
         if (bannerLife > 0f && (paused || dead || choosing)) bannerLife -= dt;
     }
@@ -718,7 +765,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void spawnEnemy(int forcedType) {
-        float screenRadius = Math.max(getWidth(), getHeight()) * 0.72f + 110f;
+        float screenRadius = Math.max(getWidth(), getHeight()) * 0.72f / Math.max(0.62f, cameraZoom) + 110f;
         float angle = random.nextFloat() * (float) (Math.PI * 2.0);
         float x = px + (float) Math.cos(angle) * screenRadius;
         float y = py + (float) Math.sin(angle) * screenRadius;
@@ -775,7 +822,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
         float actual = amount * (critHit ? 1.65f : 1f);
         e.hp -= actual;
         e.flash = 0.08f;
-        texts.add(new FloatingText(e.x, e.y - e.r - 10f, Math.round(actual), critHit ? Color.YELLOW : Color.WHITE));
+        // Les nombres sont utiles, mais leur accumulation était une cause majeure
+        // de bruit visuel et de ralentissements pendant les longues parties.
+        if (critHit || texts.size() < 22 || random.nextFloat() < 0.12f) {
+            if (texts.size() >= 64) texts.remove(0);
+            texts.add(new FloatingText(e.x, e.y - e.r - 10f, Math.round(actual),
+                    critHit ? Color.YELLOW : Color.WHITE));
+        }
         if (e.hp <= 0f) killEnemy(e);
     }
 
@@ -902,6 +955,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
             codes.add("ORBIT");
             codes.add("LIGHTNING");
             codes.add("ROCKET");
+            codes.add("DRONE");
+            codes.add("VOID");
         } else if (source == CHOICE_ARTIFACT) {
             codes.add("ART_CROWN");
             codes.add("ART_WARD");
@@ -955,6 +1010,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "ORBIT": return orbitLevel == 0 ? "NOUVELLE ARME : ORBITALES" : "ORBITALES +";
             case "LIGHTNING": return lightningLevel == 0 ? "NOUVELLE ARME : FOUDRE" : "FOUDRE +";
             case "ROCKET": return rocketLevel == 0 ? "NOUVELLE ARME : ROQUETTES" : "ROQUETTES +";
+            case "DRONE": return droneLevel == 0 ? "NOUVELLE ARME : DRONES" : "DRONES +";
+            case "VOID": return voidLevel == 0 ? "NOUVELLE ARME : IMPULSION" : "IMPULSION +";
             case "HEAL": return "SOINS";
             case "ART_CROWN": return artifactCrownLevel == 0 ? "ARTEFACT : COURONNE" : "COURONNE +" + artifactCrownLevel;
             case "ART_WARD": return artifactWardLevel == 0 ? "ARTEFACT : ÉGIDE" : "ÉGIDE +" + artifactWardLevel;
@@ -981,6 +1038,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "ORBIT": return "Lames qui tournent autour de toi";
             case "LIGHTNING": return "Éclairs en chaîne automatiques";
             case "ROCKET": return "Roquettes chercheuses explosives";
+            case "DRONE": return "Serviteurs volants qui frappent les héros";
+            case "VOID": return "Onde d'ombre autour du Seigneur";
             case "HEAL": return "Récupère " + Math.round(28f * m) + "% des PV";
             case "ART_CROWN": return "Toutes les armes gagnent dégâts et critique";
             case "ART_WARD": return "PV, armure et régénération augmentés";
@@ -1028,6 +1087,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "ORBIT": orbitLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
             case "LIGHTNING": lightningLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
             case "ROCKET": rocketLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
+            case "DRONE": droneLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
+            case "VOID": voidLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
             case "HEAL": hp = Math.min(maxHp, hp + maxHp * Math.min(1f, 0.28f * m)); break;
             case "ART_CROWN":
                 artifactCrownLevel++;
@@ -1107,10 +1168,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
         canvas.save();
         float anchorX = w * 0.5f;
         float anchorY = h * 0.56f;
-        canvas.translate(anchorX - camX, anchorY - camY);
+        canvas.translate(anchorX, anchorY);
+        canvas.scale(cameraZoom, cameraZoom);
+        canvas.translate(-camX, -camY);
         drawWorld(canvas);
         canvas.restore();
         drawHud(canvas, w, h);
+        if (tutorialLife > 0f && !paused && !dead && !choosing) drawTutorial(canvas, w, h);
         if (choosing) drawChoices(canvas, w, h);
         if (paused && !dead && !choosing) drawPause(canvas, w, h);
         if (dead) drawDeath(canvas, w, h);
@@ -1118,7 +1182,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void drawBackground(Canvas c, int w, int h) {
-        c.drawColor(Color.rgb(15, 12, 22));
+        paint.setShader(new LinearGradient(0f, 0f, 0f, h,
+                Color.rgb(28, 16, 35), Color.rgb(8, 8, 15), Shader.TileMode.CLAMP));
+        c.drawRect(0f, 0f, w, h, paint);
+        paint.setShader(null);
         // Dalles de château : le fond reste lisible sur un petit écran mais donne
         // immédiatement une identité médiévale au terrain de jeu.
         paint.setColor(Color.rgb(28, 22, 36));
@@ -1136,6 +1203,14 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 c.drawRect(x + 3f, y + tile - 3f, x + tile, y + tile, paint);
             }
         }
+        // Reflets de torches latérales et vignette : la scène reste sombre sans
+        // sacrifier la lisibilité des ennemis et des projectiles.
+        paint.setShader(new RadialGradient(w * 0.06f, h * 0.48f, w * 0.48f,
+                Color.argb(78, 218, 92, 45), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        c.drawRect(0f, 0f, w, h, paint);
+        paint.setShader(new RadialGradient(w * 0.94f, h * 0.64f, w * 0.42f,
+                Color.argb(58, 112, 52, 180), Color.TRANSPARENT, Shader.TileMode.CLAMP));
+        c.drawRect(0f, 0f, w, h, paint);
         paint.setShader(new RadialGradient(w * 0.5f, h * 0.54f, Math.max(w, h) * 0.72f,
                 Color.argb(0, 0, 0, 0), Color.argb(160, 0, 0, 0), Shader.TileMode.CLAMP));
         c.drawRect(0f, 0f, w, h, paint);
@@ -1171,17 +1246,17 @@ public class GameView extends View implements Choreographer.FrameCallback {
 
     private void drawWorldMap(Canvas c) {
         if (!worldReady) return;
-        paint.setColor(Color.rgb(19, 34, 34));
+        paint.setColor(Color.argb(150, 18, 18, 28));
         c.drawCircle(0f, 0f, worldRadius, paint);
         if (previousWorldRadius > 0f) {
-            stroke.setColor(Color.argb(70, 105, 205, 180));
+            stroke.setColor(Color.argb(65, 188, 105, 215));
             stroke.setStrokeWidth(3f);
             c.drawCircle(0f, 0f, previousWorldRadius, stroke);
         }
-        stroke.setColor(Color.rgb(85, 225, 180));
+        stroke.setColor(Color.rgb(202, 143, 74));
         stroke.setStrokeWidth(8f);
         c.drawCircle(0f, 0f, worldRadius, stroke);
-        stroke.setColor(Color.argb(70, 85, 225, 180));
+        stroke.setColor(Color.argb(62, 151, 70, 183));
         stroke.setStrokeWidth(24f);
         c.drawCircle(0f, 0f, worldRadius - 12f, stroke);
 
@@ -1236,27 +1311,60 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void drawPlayer(Canvas c) {
+        float bob = (float) Math.sin(elapsed * 5.2f) * 1.8f;
         paint.setColor(Color.argb(95, 0, 0, 0));
-        c.drawOval(px - 19f, py + 11f, px + 19f, py + 25f, paint);
-        // Le joueur est le seigneur des ombres : cape, armure noire et couronne.
+        c.drawOval(px - 27f, py + 15f, px + 27f, py + 29f, paint);
+        c.save();
+        c.translate(0f, bob);
+
+        float auraPulse = 1f + (float) Math.sin(elapsed * 4.2f) * 0.06f;
+        paint.setColor(Color.argb(invuln > 0f ? 82 : 42, 190, 58, 236));
+        c.drawCircle(px, py, 29f * auraPulse, paint);
+
+        // Cape lourde et asymétrique, animée par le déplacement.
+        float flutter = (float) Math.sin(elapsed * 7f) * 3f;
         Path cape = new Path();
-        cape.moveTo(px - 17f, py + 4f); cape.lineTo(px - 28f, py + 25f);
-        cape.lineTo(px + 28f, py + 25f); cape.lineTo(px + 17f, py + 4f); cape.close();
-        paint.setColor(Color.rgb(47, 18, 55)); c.drawPath(cape, paint);
-        int col = invuln > 0f && ((int) (elapsed * 24f) % 2 == 0) ? Color.WHITE : Color.rgb(43, 39, 58);
-        paint.setColor(col);
-        c.drawCircle(px, py, 18f, paint);
-        stroke.setColor(Color.WHITE);
-        stroke.setStrokeWidth(3f);
-        c.drawCircle(px, py, 18f, stroke);
-        paint.setColor(Color.rgb(255, 74, 74));
-        float eyeX = px + lastMoveX * 7f;
-        float eyeY = py + lastMoveY * 7f;
-        c.drawCircle(eyeX, eyeY, 3f, paint);
+        cape.moveTo(px - 15f, py + 2f);
+        cape.lineTo(px - 29f - lastMoveX * 5f, py + 28f - lastMoveY * 3f + flutter);
+        cape.lineTo(px, py + 22f - flutter * 0.35f);
+        cape.lineTo(px + 29f - lastMoveX * 5f, py + 28f - lastMoveY * 3f - flutter);
+        cape.lineTo(px + 15f, py + 2f);
+        cape.close();
+        paint.setColor(Color.rgb(54, 18, 68));
+        c.drawPath(cape, paint);
+        stroke.setColor(Color.rgb(135, 57, 151));
+        stroke.setStrokeWidth(2f);
+        c.drawPath(cape, stroke);
+
+        // Armure, capuche et masque du seigneur des ombres.
+        paint.setColor(Color.rgb(33, 31, 44));
+        c.drawRoundRect(px - 16f, py - 5f, px + 16f, py + 21f, 9f, 9f, paint);
+        stroke.setColor(invuln > 0f ? Color.WHITE : Color.rgb(188, 151, 91));
+        stroke.setStrokeWidth(2.5f);
+        c.drawRoundRect(px - 16f, py - 5f, px + 16f, py + 21f, 9f, 9f, stroke);
+        paint.setColor(Color.rgb(22, 20, 31));
+        c.drawCircle(px, py - 9f, 17f, paint);
+        paint.setColor(Color.rgb(8, 7, 13));
+        c.drawRoundRect(px - 11f, py - 13f, px + 11f, py - 2f, 5f, 5f, paint);
+        float lookX = lastMoveX * 4f;
+        float lookY = lastMoveY * 2f;
+        paint.setColor(Color.rgb(255, 64, 78));
+        c.drawCircle(px - 5f + lookX, py - 8f + lookY, 2.4f, paint);
+        c.drawCircle(px + 5f + lookX, py - 8f + lookY, 2.4f, paint);
+
+        // Cornes de bronze : silhouette immédiatement reconnaissable.
         Path horns = new Path();
-        horns.moveTo(px - 12f, py - 12f); horns.lineTo(px - 19f, py - 27f); horns.lineTo(px - 4f, py - 16f);
-        horns.moveTo(px + 12f, py - 12f); horns.lineTo(px + 19f, py - 27f); horns.lineTo(px + 4f, py - 16f);
-        paint.setColor(Color.rgb(175, 122, 66)); c.drawPath(horns, paint);
+        horns.moveTo(px - 13f, py - 17f); horns.lineTo(px - 23f, py - 31f); horns.lineTo(px - 5f, py - 21f);
+        horns.moveTo(px + 13f, py - 17f); horns.lineTo(px + 23f, py - 31f); horns.lineTo(px + 5f, py - 21f);
+        stroke.setColor(Color.rgb(214, 157, 76));
+        stroke.setStrokeWidth(5f);
+        stroke.setStrokeCap(Paint.Cap.ROUND);
+        c.drawPath(horns, stroke);
+        stroke.setStrokeCap(Paint.Cap.BUTT);
+
+        paint.setColor(Color.rgb(183, 57, 73));
+        c.drawCircle(px, py + 8f, 4f, paint);
+        c.restore();
     }
 
     private void drawEnemy(Canvas c, Enemy e) {
@@ -1265,28 +1373,47 @@ public class GameView extends View implements Choreographer.FrameCallback {
         float bob = (float) Math.sin(elapsed * 4.5f + e.x * 0.01f) * (e.type == ENEMY_BOSS ? 2f : 1.5f);
         c.save(); c.translate(0f, bob);
         int color = e.flash > 0f ? Color.WHITE : colorForEnemy(e.type);
+        if (e.type == ENEMY_BOSS || e.type == ENEMY_MINIBOSS) {
+            paint.setColor(e.type == ENEMY_BOSS
+                    ? Color.argb(55, 255, 204, 82) : Color.argb(45, 230, 83, 69));
+            c.drawCircle(e.x, e.y, e.r + 14f + (float) Math.sin(elapsed * 5f) * 3f, paint);
+        }
         paint.setColor(color);
         switch (e.type) {
             case ENEMY_FAST:
                 c.save();
-                c.rotate(45f, e.x, e.y);
-                c.drawRect(e.x - e.r * 0.72f, e.y - e.r * 0.72f, e.x + e.r * 0.72f, e.y + e.r * 0.72f, paint);
-                paint.setColor(Color.WHITE); c.drawRect(e.x - 2f, e.y - e.r, e.x + 2f, e.y + e.r, paint);
+                c.rotate(45f + (float) Math.sin(elapsed * 6f + e.x) * 5f, e.x, e.y);
+                c.drawRoundRect(e.x - e.r * 0.72f, e.y - e.r * 0.72f,
+                        e.x + e.r * 0.72f, e.y + e.r * 0.72f, 4f, 4f, paint);
+                stroke.setColor(Color.rgb(229, 238, 242));
+                stroke.setStrokeWidth(3f);
+                c.drawLine(e.x - e.r, e.y + e.r * 0.7f, e.x + e.r, e.y - e.r * 0.7f, stroke);
+                c.drawLine(e.x - e.r * 0.7f, e.y - e.r, e.x + e.r * 0.7f, e.y + e.r, stroke);
                 c.restore();
                 break;
             case ENEMY_TANK:
                 c.drawRoundRect(e.x - e.r, e.y - e.r, e.x + e.r, e.y + e.r, 8f, 8f, paint);
-                paint.setColor(Color.rgb(230, 210, 164)); c.drawRect(e.x - 3f, e.y - e.r - 8f, e.x + 3f, e.y + e.r + 8f, paint);
+                paint.setColor(Color.rgb(213, 198, 160));
+                c.drawRect(e.x - 3f, e.y - e.r - 7f, e.x + 3f, e.y + e.r + 7f, paint);
+                c.drawRect(e.x - e.r - 7f, e.y - 3f, e.x + e.r + 7f, e.y + 3f, paint);
+                stroke.setColor(Color.rgb(235, 220, 180));
+                stroke.setStrokeWidth(3f);
+                c.drawRoundRect(e.x - e.r, e.y - e.r, e.x + e.r, e.y + e.r, 8f, 8f, stroke);
                 break;
             case ENEMY_SHOOTER:
                 c.drawCircle(e.x, e.y, e.r, paint);
-                stroke.setColor(Color.rgb(255, 170, 255));
-                c.drawCircle(e.x, e.y, e.r + 5f, stroke);
+                stroke.setColor(Color.rgb(235, 207, 150));
+                stroke.setStrokeWidth(3f);
+                RectF bow = new RectF(e.x - e.r - 8f, e.y - e.r, e.x + e.r + 8f, e.y + e.r);
+                c.drawArc(bow, -65f, 130f, false, stroke);
+                c.drawLine(e.x + 4f, e.y - e.r, e.x + 4f, e.y + e.r, stroke);
                 break;
             case ENEMY_MINIBOSS:
                 c.drawRoundRect(e.x - e.r, e.y - e.r, e.x + e.r, e.y + e.r, 12f, 12f, paint);
-                paint.setColor(Color.rgb(234, 196, 112)); c.drawRect(e.x - e.r - 5f, e.y - 4f, e.x + e.r + 5f, e.y + 4f, paint);
-                stroke.setColor(Color.rgb(255, 221, 117)); stroke.setStrokeWidth(5f); c.drawCircle(e.x, e.y, e.r + 7f, stroke);
+                paint.setColor(Color.rgb(234, 196, 112));
+                c.drawRect(e.x - e.r - 5f, e.y - 4f, e.x + e.r + 5f, e.y + 4f, paint);
+                c.drawRect(e.x - 4f, e.y - e.r - 5f, e.x + 4f, e.y + e.r + 5f, paint);
+                stroke.setColor(Color.rgb(255, 221, 117)); stroke.setStrokeWidth(4f); c.drawCircle(e.x, e.y, e.r + 7f, stroke);
                 break;
             case ENEMY_BOSS:
                 c.drawCircle(e.x, e.y, e.r, paint);
@@ -1298,10 +1425,22 @@ public class GameView extends View implements Choreographer.FrameCallback {
                     float a = (float) (i * Math.PI / 3.0 + elapsed * 0.4);
                     c.drawCircle(e.x + (float) Math.cos(a) * (e.r + 12f), e.y + (float) Math.sin(a) * (e.r + 12f), 5f, paint);
                 }
+                Path crown = new Path();
+                crown.moveTo(e.x - 24f, e.y - e.r + 3f);
+                crown.lineTo(e.x - 17f, e.y - e.r - 18f);
+                crown.lineTo(e.x - 5f, e.y - e.r - 7f);
+                crown.lineTo(e.x, e.y - e.r - 24f);
+                crown.lineTo(e.x + 7f, e.y - e.r - 7f);
+                crown.lineTo(e.x + 19f, e.y - e.r - 18f);
+                crown.lineTo(e.x + 25f, e.y - e.r + 3f);
+                crown.close();
+                c.drawPath(crown, paint);
                 break;
             default:
                 c.drawCircle(e.x, e.y, e.r, paint);
-                paint.setColor(Color.rgb(220, 215, 190)); c.drawRect(e.x - 3f, e.y - e.r - 4f, e.x + 3f, e.y + e.r + 4f, paint);
+                paint.setColor(Color.rgb(220, 215, 190));
+                c.drawRect(e.x - 3f, e.y - e.r - 4f, e.x + 3f, e.y + e.r + 4f, paint);
+                c.drawRect(e.x - e.r - 4f, e.y - 3f, e.x + e.r + 4f, e.y + 3f, paint);
         }
         c.restore();
         if (e.type == ENEMY_TANK || e.type == ENEMY_SHOOTER || e.type == ENEMY_MINIBOSS || e.type == ENEMY_BOSS) {
@@ -1457,6 +1596,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         c.drawText("NIV " + level + "   ☠ " + kills + "   SCORE " + score, pad, statsY, paint);
 
         drawMapHud(c, w, xpY + 32f * scale, scale);
+        drawBuildHud(c, w, scale);
 
         if (joystickPointer >= 0) {
             paint.setColor(Color.argb(65, 255, 255, 255));
@@ -1468,6 +1608,68 @@ public class GameView extends View implements Choreographer.FrameCallback {
             c.drawCircle(joyStartX + joyX * joyRadius, joyStartY + joyY * joyRadius, 34f * controlScale, paint);
         }
         paint.setFakeBoldText(false);
+    }
+
+    /** Résumé visuel du build : les couleurs indiquent immédiatement l'usage. */
+    private void drawBuildHud(Canvas c, int w, float scale) {
+        String[] codes = {"AURA", "ORBIT", "LIGHTNING", "ROCKET", "DRONE", "VOID",
+                "ART_CROWN", "ART_WARD", "ART_COMPASS", "ART_HOURGLASS"};
+        int[] levels = {auraLevel, orbitLevel, lightningLevel, rocketLevel, droneLevel, voidLevel,
+                artifactCrownLevel, artifactWardLevel, artifactCompassLevel, artifactHourglassLevel};
+        int visible = 0;
+        for (int level : levels) if (level > 0) visible++;
+        if (visible == 0) return;
+
+        float size = 25f * scale;
+        float gap = 5f * scale;
+        float right = w - 12f * scale;
+        float top = 138f * scale;
+        int slot = 0;
+        for (int i = 0; i < codes.length; i++) {
+            if (levels[i] <= 0) continue;
+            int col = slot % 2;
+            int row = slot / 2;
+            float cx = right - size * 0.5f - col * (size + gap);
+            float cy = top + size * 0.5f + row * (size + gap);
+            paint.setColor(Color.argb(178, 12, 15, 23));
+            RectF box = new RectF(cx - size * 0.5f, cy - size * 0.5f,
+                    cx + size * 0.5f, cy + size * 0.5f);
+            c.drawRoundRect(box, 7f * scale, 7f * scale, paint);
+            drawUpgradeGlyph(c, codes[i], cx, cy, 8f * scale);
+            paint.setTextAlign(Paint.Align.RIGHT);
+            paint.setFakeBoldText(true);
+            paint.setTextSize(8f * scale);
+            paint.setColor(Color.WHITE);
+            c.drawText(String.valueOf(levels[i]), box.right - 2f * scale,
+                    box.bottom - 2f * scale, paint);
+            slot++;
+        }
+        paint.setFakeBoldText(false);
+    }
+
+    private void drawTutorial(Canvas c, int w, int h) {
+        float scale = Math.min(1.35f, uiScale(w, h));
+        float alpha = Math.min(1f, Math.min(tutorialLife, 1.2f));
+        float left = 24f * scale;
+        float right = w - 24f * scale;
+        float bottom = h - 42f * scale;
+        RectF panel = new RectF(left, bottom - 62f * scale, right, bottom);
+        paint.setColor(Color.argb((int) (190f * alpha), 10, 9, 17));
+        c.drawRoundRect(panel, 18f * scale, 18f * scale, paint);
+        stroke.setColor(Color.argb((int) (160f * alpha), 191, 130, 220));
+        stroke.setStrokeWidth(2f * scale);
+        c.drawRoundRect(panel, 18f * scale, 18f * scale, stroke);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setFakeBoldText(true);
+        paint.setColor(Color.argb((int) (255f * alpha), 244, 229, 203));
+        paint.setTextSize(13f * scale);
+        c.drawText("GLISSE POUR BOUGER  •  ATTAQUES AUTOMATIQUES",
+                w * 0.5f, panel.top + 25f * scale, paint);
+        paint.setFakeBoldText(false);
+        paint.setColor(Color.argb((int) (230f * alpha), 190, 198, 211));
+        paint.setTextSize(11f * scale);
+        c.drawText("Ramasse les gemmes • les champions donnent les armes",
+                w * 0.5f, panel.top + 47f * scale, paint);
     }
 
     private void drawMapHud(Canvas c, int w, float y, float scale) {
@@ -1524,48 +1726,58 @@ public class GameView extends View implements Choreographer.FrameCallback {
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setFakeBoldText(true);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(29f * scale);
+        paint.setTextSize(26f * scale);
         String heading = choiceSource == CHOICE_WEAPON ? "ARME DE BOSS"
                 : choiceSource == CHOICE_ARTIFACT ? "COFFRE D'ARTEFACT"
                 : chestChoice ? "COFFRE" : "NIVEAU " + level;
-        c.drawText(heading, w / 2f, 74f * scale, paint);
-        paint.setTextSize(16f * scale);
-        paint.setColor(Color.rgb(180, 200, 205));
-        c.drawText("Choisis avec le pouce", w / 2f, 101f * scale, paint);
+        c.drawText(heading, w / 2f, 58f * scale, paint);
+        paint.setTextSize(13f * scale);
+        paint.setColor(Color.rgb(179, 190, 208));
+        c.drawText("Trois choix • touche une carte", w / 2f, 82f * scale, paint);
 
-        float margin = 12f * scale;
-        float gap = 8f * scale;
-        float cardBottom = h - 24f * scale;
-        float cardTop = Math.max(h * 0.58f, cardBottom - 220f * scale);
-        float cardW = (w - margin * 2f - gap * 2f) / 3f;
+        // Trois grandes lignes lisibles remplacent les anciennes colonnes trop
+        // étroites. Toute la carte est une cible tactile accessible au pouce.
+        float margin = 14f * scale;
+        float gap = 9f * scale;
+        float cardH = 86f * scale;
+        float cardBottom = h - 18f * scale;
+        float cardTop = cardBottom - cardH * 3f - gap * 2f;
+        float cardW = w - margin * 2f;
         for (int i = 0; i < currentChoices.size() && i < 3; i++) {
             Upgrade u = currentChoices.get(i);
-            float left = margin + i * (cardW + gap);
-            choiceRects[i].set(left, cardTop, left + cardW, cardBottom);
+            float top = cardTop + i * (cardH + gap);
+            choiceRects[i].set(margin, top, margin + cardW, top + cardH);
             paint.setColor(cardColor(u.rarity));
-            c.drawRoundRect(choiceRects[i], 20f * scale, 20f * scale, paint);
+            c.drawRoundRect(choiceRects[i], 18f * scale, 18f * scale, paint);
+            paint.setColor(withAlpha(rarityColor(u.rarity), 34));
+            c.drawRoundRect(choiceRects[i].left, choiceRects[i].top,
+                    choiceRects[i].left + 69f * scale, choiceRects[i].bottom,
+                    18f * scale, 18f * scale, paint);
             stroke.setColor(rarityColor(u.rarity));
-            stroke.setStrokeWidth(4f * scale);
-            c.drawRoundRect(choiceRects[i], 20f * scale, 20f * scale, stroke);
-            drawUpgradeIcon(c, u, choiceRects[i].left + 29f * scale, cardTop + 29f * scale, 16f * scale);
-            paint.setTextAlign(Paint.Align.CENTER);
+            stroke.setStrokeWidth(2.5f * scale);
+            c.drawRoundRect(choiceRects[i], 18f * scale, 18f * scale, stroke);
+            drawUpgradeIcon(c, u, choiceRects[i].left + 34f * scale,
+                    choiceRects[i].centerY(), 18f * scale);
+            paint.setTextAlign(Paint.Align.LEFT);
             paint.setColor(rarityColor(u.rarity));
-            paint.setTextSize(13f * scale);
-            c.drawText(rarityName(u.rarity), choiceRects[i].centerX(), cardTop + 27f * scale, paint);
+            paint.setTextSize(10f * scale);
+            c.drawText(rarityName(u.rarity), choiceRects[i].left + 68f * scale,
+                    top + 19f * scale, paint);
             paint.setColor(Color.WHITE);
             paint.setTextSize(16f * scale);
-            drawWrappedText(c, u.title, choiceRects[i].centerX(), cardTop + 57f * scale,
-                    cardW - 22f * scale, 19f * scale, 2);
+            c.drawText(u.title, choiceRects[i].left + 68f * scale,
+                    top + 40f * scale, paint);
             paint.setFakeBoldText(false);
-            paint.setColor(Color.rgb(214, 224, 226));
-            paint.setTextSize(13f * scale);
-            drawWrappedText(c, u.description, choiceRects[i].centerX(), cardTop + 111f * scale,
-                    cardW - 22f * scale, 17f * scale, 3);
+            paint.setColor(Color.rgb(208, 215, 224));
+            paint.setTextSize(12f * scale);
+            drawWrappedText(c, u.description, choiceRects[i].left + 68f * scale,
+                    top + 61f * scale, cardW - 166f * scale, 14f * scale, 2);
             paint.setFakeBoldText(true);
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setColor(Color.WHITE);
-            paint.setTextSize(13f * scale);
-            c.drawText("CHOISIR", choiceRects[i].centerX(), cardBottom - 17f * scale, paint);
+            paint.setTextAlign(Paint.Align.RIGHT);
+            paint.setColor(rarityColor(u.rarity));
+            paint.setTextSize(11f * scale);
+            c.drawText("CHOISIR  ›", choiceRects[i].right - 14f * scale,
+                    choiceRects[i].centerY() + 4f * scale, paint);
         }
         paint.setFakeBoldText(false);
     }
@@ -1587,13 +1799,21 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 return Color.rgb(100, 225, 205);
             case "LIGHTNING":
                 return Color.rgb(255, 215, 75);
+            case "DRONE":
+                return Color.rgb(75, 205, 235);
+            case "VOID":
+                return Color.rgb(176, 82, 230);
             default:
                 return Color.rgb(185, 200, 205);
         }
     }
 
     private void drawUpgradeIcon(Canvas c, Upgrade u, float cx, float cy, float radius) {
-        int color = utilityColor(u.code);
+        drawUpgradeGlyph(c, u.code, cx, cy, radius);
+    }
+
+    private void drawUpgradeGlyph(Canvas c, String code, float cx, float cy, float radius) {
+        int color = utilityColor(code);
         paint.setColor(withAlpha(color, 205));
         c.drawCircle(cx, cy, radius, paint);
         stroke.setColor(Color.argb(235, 245, 250, 250));
@@ -1601,7 +1821,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         stroke.setStrokeCap(Paint.Cap.ROUND);
         c.drawCircle(cx, cy, radius, stroke);
         float r = radius * 0.55f;
-        switch (u.code) {
+        switch (code) {
             case "HP": case "HEAL": case "REGEN": case "ART_WARD":
                 c.drawLine(cx - r, cy, cx + r, cy, stroke);
                 c.drawLine(cx, cy - r, cx, cy + r, stroke);
@@ -1651,6 +1871,17 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 c.drawLine(cx - r * 0.7f, cy + r * 0.65f, cx + r * 0.75f, cy, stroke);
                 c.drawLine(cx + r * 0.75f, cy, cx - r * 0.7f, cy - r * 0.65f, stroke);
                 c.drawLine(cx - r * 0.7f, cy - r * 0.65f, cx - r * 0.7f, cy + r * 0.65f, stroke);
+                break;
+            case "DRONE":
+                c.drawCircle(cx, cy, r * 0.28f, paint);
+                c.drawCircle(cx - r * 0.72f, cy + r * 0.18f, r * 0.22f, paint);
+                c.drawCircle(cx + r * 0.72f, cy + r * 0.18f, r * 0.22f, paint);
+                c.drawLine(cx - r * 0.5f, cy, cx + r * 0.5f, cy, stroke);
+                break;
+            case "VOID":
+                c.drawCircle(cx, cy, r * 0.28f, paint);
+                c.drawCircle(cx, cy, r * 0.82f, stroke);
+                c.drawArc(new RectF(cx - r, cy - r, cx + r, cy + r), -55f, 220f, false, stroke);
                 break;
             case "ART_CROWN": case "ART_COMPASS": case "ART_HOURGLASS":
                 c.drawLine(cx, cy - r, cx + r, cy, stroke);
@@ -1827,7 +2058,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
         restartRect.set(x1, y + (buttonH + gap) * 3f, x2, y + buttonH * 4f + gap * 3f);
         quitRect.set(x1, y + (buttonH + gap) * 4f, x2, y + buttonH * 5f + gap * 4f);
         drawMenuButton(c, resumeRect, "REPRENDRE", Color.rgb(52, 145, 92));
-        drawMenuButton(c, soundRect, soundOn ? "SON : OUI" : "SON : NON", Color.rgb(45, 77, 90));
+        drawMenuButton(c, soundRect, soundOn ? "SON & VIBRATIONS : OUI" : "SON & VIBRATIONS : NON",
+                soundOn ? Color.rgb(45, 77, 90) : Color.rgb(56, 59, 64));
         drawMenuButton(c, autoRect, autoChoice ? "SÉLECTION AUTO : OUI" : "SÉLECTION AUTO : NON",
                 autoChoice ? Color.rgb(53, 150, 95) : Color.rgb(66, 72, 75));
         drawMenuButton(c, restartRect, "RECOMMENCER", Color.rgb(80, 70, 45));
@@ -1925,6 +2157,16 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 return true;
             }
             if (choosing) {
+                if (chestRevealing) {
+                    chestRevealTime = 2.05f;
+                    finishChestReveal();
+                    return true;
+                }
+                if (levelRevealing) {
+                    levelRevealTime = 0.72f;
+                    finishLevelReveal();
+                    return true;
+                }
                 for (int i = 0; i < currentChoices.size() && i < 3; i++) {
                     if (choiceRects[i].contains(x, y)) {
                         applyUpgrade(currentChoices.get(i));
@@ -1935,9 +2177,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
             }
             if (paused) {
                 if (resumeRect.contains(x, y)) paused = false;
-                else if (soundRect.contains(x, y)) soundOn = !soundOn;
+                else if (soundRect.contains(x, y)) {
+                    soundOn = !soundOn;
+                    settings.edit().putBoolean(SETTING_EFFECTS, soundOn).apply();
+                }
                 else if (autoRect.contains(x, y)) {
                     autoChoice = !autoChoice;
+                    settings.edit().putBoolean(SETTING_AUTO_CHOICE, autoChoice).apply();
                     showBanner(autoChoice ? "SÉLECTION AUTO ACTIVÉE" : "SÉLECTION AUTO DÉSACTIVÉE");
                 }
                 else if (restartRect.contains(x, y)) resetGame();
@@ -1951,6 +2197,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 return true;
             }
             if (x < getWidth() * 0.62f && y > getHeight() * 0.42f && joystickPointer < 0) {
+                tutorialLife = Math.min(tutorialLife, 1.15f);
                 joystickPointer = event.getPointerId(index);
                 joyStartX = x;
                 joyStartY = y;
@@ -1973,6 +2220,20 @@ public class GameView extends View implements Choreographer.FrameCallback {
             }
             return true;
         }
+        return true;
+    }
+
+    /** Utilisé par le bouton Retour Android : pause d'abord, fermeture ensuite. */
+    public boolean handleBackPressed() {
+        if (choosing) return true;
+        if (dead) return false;
+        if (paused) {
+            paused = false;
+            return true;
+        }
+        paused = true;
+        moveX = moveY = 0f;
+        joystickPointer = -1;
         return true;
     }
 

@@ -489,30 +489,31 @@ public class GameViewV7 extends GameViewV6 {
     }
 
     private float sx(float worldX) {
-        return worldX - number(fCamX) + getWidth() * 0.5f;
+        return worldToScreenX(worldX);
     }
 
     private float sy(float worldY) {
-        return worldY - number(fCamY) + getHeight() * 0.56f;
+        return worldToScreenY(worldY);
     }
 
     private void drawWorldEvents(Canvas canvas) {
+        float zoom = getCameraZoom();
         for (Meteor m : meteors) {
             float x = sx(m.x), y = sy(m.y);
             if (!m.exploded) {
                 float pulse = 1f + (float) Math.sin(number(fElapsed) * 12f + m.x * 0.01f) * 0.08f;
                 s.setColor(Color.argb(210, 255, 125, 60));
                 s.setStrokeWidth(4f);
-                canvas.drawCircle(x, y, (46f + m.delay * 20f) * pulse, s);
+                canvas.drawCircle(x, y, (46f + m.delay * 20f) * pulse * zoom, s);
                 p.setColor(Color.argb(55, 255, 80, 40));
-                canvas.drawCircle(x, y, 42f, p);
+                canvas.drawCircle(x, y, 42f * zoom, p);
             } else {
                 float alpha = Math.max(0f, m.life / 0.48f);
                 p.setColor(Color.argb((int) (110f * alpha), 255, 145, 60));
-                canvas.drawCircle(x, y, 135f * (1.05f - alpha * 0.35f), p);
+                canvas.drawCircle(x, y, 135f * (1.05f - alpha * 0.35f) * zoom, p);
                 s.setColor(Color.argb((int) (240f * alpha), 255, 225, 130));
                 s.setStrokeWidth(7f);
-                canvas.drawCircle(x, y, 120f * (1.05f - alpha * 0.25f), s);
+                canvas.drawCircle(x, y, 120f * (1.05f - alpha * 0.25f) * zoom, s);
             }
         }
 
@@ -520,14 +521,14 @@ public class GameViewV7 extends GameViewV6 {
             float x = sx(beacon.x), y = sy(beacon.y);
             float ratio = Math.min(1f, beacon.progress / 4.2f);
             p.setColor(Color.argb(42, 75, 220, 255));
-            canvas.drawCircle(x, y, beacon.radius, p);
+            canvas.drawCircle(x, y, beacon.radius * zoom, p);
             s.setStrokeWidth(4f);
             s.setColor(Color.rgb(90, 225, 255));
-            canvas.drawCircle(x, y, beacon.radius, s);
+            canvas.drawCircle(x, y, beacon.radius * zoom, s);
             s.setStrokeWidth(8f);
             s.setColor(Color.rgb(125, 255, 185));
-            RectF ring = new RectF(x - beacon.radius - 8f, y - beacon.radius - 8f,
-                    x + beacon.radius + 8f, y + beacon.radius + 8f);
+            float ringRadius = (beacon.radius + 8f) * zoom;
+            RectF ring = new RectF(x - ringRadius, y - ringRadius, x + ringRadius, y + ringRadius);
             canvas.drawArc(ring, -90f, ratio * 360f, false, s);
             p.setTextAlign(Paint.Align.CENTER);
             p.setFakeBoldText(true);
@@ -542,13 +543,14 @@ public class GameViewV7 extends GameViewV6 {
     private void drawEliteOverlays(Canvas canvas) {
         List<Object> list = enemies();
         if (list == null) return;
+        float zoom = getCameraZoom();
         for (Map.Entry<Object, EliteInfo> entry : elites.entrySet()) {
             Object enemy = entry.getKey();
             if (!list.contains(enemy)) continue;
             try {
                 bindEnemy(enemy);
                 float x = sx(eX.getFloat(enemy)), y = sy(eY.getFloat(enemy));
-                float r = eR.getFloat(enemy) + 10f;
+                float r = (eR.getFloat(enemy) + 10f) * zoom;
                 int color = entry.getValue().kind == ELITE_BERSERKER ? Color.rgb(255, 90, 80)
                         : entry.getValue().kind == ELITE_COLOSSUS ? Color.rgb(255, 205, 70)
                         : Color.rgb(160, 105, 255);

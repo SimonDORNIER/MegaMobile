@@ -48,4 +48,13 @@ public class MainActivity extends Activity {
         if (gameView != null) gameView.pauseGame();
         super.onPause();
     }
+
+    @Override
+    public void onBackPressed() {
+        if (gameView != null && gameView.handleBackPressed()) {
+            immersive();
+            return;
+        }
+        super.onBackPressed();
+    }
 }

@@ -311,16 +311,23 @@ public class GameViewV6 extends GameViewFinal {
     }
 
     private void tone(int tone, int ms) {
-        try { if (tones != null) tones.startTone(tone, ms); }
+        try { if (isSoundEnabled() && tones != null) tones.startTone(tone, ms); }
         catch (Exception ignored) { }
     }
 
     private void pulse(long ms) {
         try {
-            if (vibrator == null || !vibrator.hasVibrator()) return;
+            if (!isSoundEnabled() || vibrator == null || !vibrator.hasVibrator()) return;
             if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(VibrationEffect.createOneShot(ms, 80));
             else vibrator.vibrate(ms);
         } catch (Exception ignored) { }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        try { if (tones != null) tones.release(); }
+        catch (Exception ignored) { }
+        super.onDetachedFromWindow();
     }
 
     @Override
@@ -337,21 +344,20 @@ public class GameViewV6 extends GameViewFinal {
     }
 
     private void drawRelics(Canvas canvas) {
-        float camX = number(fCamX), camY = number(fCamY);
-        float anchorX = getWidth() * 0.5f, anchorY = getHeight() * 0.56f;
         float t = number(fElapsed);
+        float zoom = getCameraZoom();
         for (Relic relic : relics) {
-            float sx = relic.x - camX + anchorX;
-            float sy = relic.y - camY + anchorY;
+            float sx = worldToScreenX(relic.x);
+            float sy = worldToScreenY(relic.y);
             float pulse = 1f + (float) Math.sin(t * 6f + relic.x * 0.01f) * 0.10f;
             int color = relic.type == RELIC_SHIELD ? Color.rgb(80, 170, 255)
                     : relic.type == RELIC_FRENZY ? Color.rgb(255, 95, 70)
                     : Color.rgb(215, 90, 255);
             paintV6.setColor(Color.argb(46, Color.red(color), Color.green(color), Color.blue(color)));
-            canvas.drawCircle(sx, sy, 46f * pulse, paintV6);
+            canvas.drawCircle(sx, sy, 46f * pulse * zoom, paintV6);
             strokeV6.setColor(color);
             strokeV6.setStrokeWidth(4f);
-            canvas.drawCircle(sx, sy, 27f * pulse, strokeV6);
+            canvas.drawCircle(sx, sy, 27f * pulse * zoom, strokeV6);
             paintV6.setColor(Color.WHITE);
             paintV6.setTextAlign(Paint.Align.CENTER);
             paintV6.setFakeBoldText(true);
