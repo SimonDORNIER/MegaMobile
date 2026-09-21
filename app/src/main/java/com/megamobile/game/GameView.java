@@ -4,7 +4,10 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RadialGradient;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.os.SystemClock;
 import android.view.Choreographer;
 import android.view.MotionEvent;
@@ -23,6 +26,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private static final int ENEMY_TANK = 2;
     private static final int ENEMY_SHOOTER = 3;
     private static final int ENEMY_BOSS = 4;
+    private static final int ENEMY_MINIBOSS = 5;
 
     protected static final int CHEST_STANDARD = 0;
     protected static final int CHEST_WEAPON = 1;
@@ -68,6 +72,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private float difficulty = 1f;
     private float spawnCd;
     private float bossCd;
+    private float miniBossCd;
     private int kills;
     private int score;
     private String banner = "";
@@ -195,6 +200,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         difficulty = 1f;
         spawnCd = 0.2f;
         bossCd = 34f;
+        miniBossCd = 16f;
         kills = 0;
         score = 0;
         px = py = 0f;
@@ -300,6 +306,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
             spawnEnemy(true);
             bossCd = Math.max(24f, remote.bossInterval / Math.min(1.8f, 0.85f + difficulty * 0.06f));
             showBanner("BOSS");
+        }
+
+        miniBossCd -= dt;
+        if (miniBossCd <= 0f) {
+            spawnEnemy(ENEMY_MINIBOSS);
+            miniBossCd = Math.max(18f, 31f / Math.min(2.0f, 0.9f + difficulty * 0.08f));
+            showBanner("CHAMPION HÉROÏQUE — ARME À RÉCUPÉRER");
         }
 
         updateWeapons(dt);
@@ -701,6 +714,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void spawnEnemy(boolean boss) {
+        spawnEnemy(boss ? ENEMY_BOSS : -1);
+    }
+
+    private void spawnEnemy(int forcedType) {
         float screenRadius = Math.max(getWidth(), getHeight()) * 0.72f + 110f;
         float angle = random.nextFloat() * (float) (Math.PI * 2.0);
         float x = px + (float) Math.cos(angle) * screenRadius;
@@ -715,7 +732,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         }
 
         int type;
-        if (boss) type = ENEMY_BOSS;
+        if (forcedType >= 0) type = forcedType;
         else {
             float r = random.nextFloat();
             if (elapsed > 95f && r < 0.13f) type = ENEMY_SHOOTER;
@@ -737,10 +754,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 baseHp = 58f; baseSpeed = 70f; baseDamage = 11f; radius = 18f; break;
             case ENEMY_BOSS:
                 baseHp = 800f + elapsed * 4f; baseSpeed = 48f; baseDamage = 25f; radius = 48f; break;
+            case ENEMY_MINIBOSS:
+                baseHp = 320f + elapsed * 2.5f; baseSpeed = 62f; baseDamage = 19f; radius = 34f; break;
             default:
                 baseHp = 42f; baseSpeed = 79f; baseDamage = 10f; radius = 18f;
         }
-        float hpScale = (float) Math.pow(difficulty, type == ENEMY_BOSS ? 1.32 : 1.12);
+        float hpScale = (float) Math.pow(difficulty, type == ENEMY_BOSS ? 1.32 : type == ENEMY_MINIBOSS ? 1.24 : 1.12);
         float speedScale = 1f + Math.min(0.85f, (difficulty - 1f) * 0.055f);
         float damageScale = 1f + (difficulty - 1f) * 0.14f;
         Enemy e = new Enemy(type, x, y, radius, baseHp * hpScale, baseSpeed * speedScale, baseDamage * damageScale);
@@ -763,19 +782,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private void killEnemy(Enemy e) {
         if (!enemies.remove(e)) return;
         kills++;
-        int value = e.type == ENEMY_BOSS ? 28 : (e.type == ENEMY_TANK ? 3 : e.type == ENEMY_SHOOTER ? 2 : 1);
+        int value = e.type == ENEMY_BOSS ? 28 : e.type == ENEMY_MINIBOSS ? 12 : (e.type == ENEMY_TANK ? 3 : e.type == ENEMY_SHOOTER ? 2 : 1);
         score += value * 10 + Math.round(difficulty);
         gems.add(new Gem(e.x, e.y, value));
-        burst(e.x, e.y, colorForEnemy(e.type), e.type == ENEMY_BOSS ? 34 : 10);
-        if (e.type == ENEMY_BOSS) {
+        burst(e.x, e.y, colorForEnemy(e.type), e.type == ENEMY_BOSS ? 34 : e.type == ENEMY_MINIBOSS ? 22 : 10);
+        if (e.type == ENEMY_BOSS || e.type == ENEMY_MINIBOSS) {
             dropChest(e.x, e.y, CHEST_WEAPON);
-            showBanner("ARME DE BOSS À RÉCUPÉRER");
-        } else {
-            float chestChance = Math.min(0.055f, 0.012f + difficulty * 0.0022f);
-            if (random.nextFloat() < chestChance) {
-                dropChest(e.x, e.y, CHEST_STANDARD);
-                showBanner("COFFRE LÂCHÉ");
-            }
+            showBanner(e.type == ENEMY_BOSS ? "ARME DU SEIGNEUR HÉROÏQUE" : "ARME DU CHAMPION");
         }
     }
 
@@ -895,19 +908,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
             codes.add("ART_COMPASS");
             codes.add("ART_HOURGLASS");
         } else {
-            Collections.addAll(codes, base);
-            codes.add("AURA");
-            codes.add("ORBIT");
-            codes.add("LIGHTNING");
-            codes.add("ROCKET");
             codes.add("HEAL");
-            if (source == CHOICE_STANDARD) {
-                codes.add("MULTI");
-                codes.add("AURA");
-                codes.add("ORBIT");
-                codes.add("LIGHTNING");
-                codes.add("ROCKET");
-            }
+            Collections.addAll(codes, base);
         }
         String code = codes.get(random.nextInt(codes.size()));
         return new Upgrade(code, rarity, titleFor(code), descriptionFor(code, rarity));
@@ -1116,20 +1118,32 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void drawBackground(Canvas c, int w, int h) {
-        c.drawColor(Color.rgb(17, 26, 29));
-        paint.setColor(Color.rgb(22, 34, 36));
-        float tile = 88f;
+        c.drawColor(Color.rgb(15, 12, 22));
+        // Dalles de château : le fond reste lisible sur un petit écran mais donne
+        // immédiatement une identité médiévale au terrain de jeu.
+        paint.setColor(Color.rgb(28, 22, 36));
+        float tile = 74f;
         float ox = ((-camX + w * 0.5f) % tile + tile) % tile;
         float oy = ((-camY + h * 0.56f) % tile + tile) % tile;
-        for (float x = ox; x < w; x += tile) c.drawRect(x, 0, x + 1.5f, h, paint);
-        for (float y = oy; y < h; y += tile) c.drawRect(0, y, w, y + 1.5f, paint);
-
-        paint.setColor(Color.rgb(30, 46, 47));
-        for (int i = 0; i < 15; i++) {
-            float x = (i * 137f + ox * 0.31f) % Math.max(1, w);
-            float y = (i * 233f + oy * 0.47f) % Math.max(1, h);
-            c.drawCircle(x, y, 3f + i % 4, paint);
+        for (int row = -1; row < h / (int) tile + 2; row++) {
+            float y = oy + row * tile;
+            float offset = (row & 1) == 0 ? 0f : tile * 0.5f;
+            for (float x = ox - tile + offset; x < w + tile; x += tile) {
+                paint.setColor(Color.rgb(27 + (row & 1) * 3, 21 + (row & 1) * 2, 35 + (row & 1) * 4));
+                c.drawRect(x + 2f, y + 2f, x + tile - 2f, y + tile - 2f, paint);
+                paint.setColor(Color.argb(95, 8, 6, 13));
+                c.drawRect(x + tile - 3f, y + 3f, x + tile, y + tile, paint);
+                c.drawRect(x + 3f, y + tile - 3f, x + tile, y + tile, paint);
+            }
         }
+        paint.setShader(new RadialGradient(w * 0.5f, h * 0.54f, Math.max(w, h) * 0.72f,
+                Color.argb(0, 0, 0, 0), Color.argb(160, 0, 0, 0), Shader.TileMode.CLAMP));
+        c.drawRect(0f, 0f, w, h, paint);
+        paint.setShader(null);
+        paint.setColor(Color.argb(90, 205, 157, 76));
+        c.drawRect(0f, h * 0.155f, w, h * 0.158f, paint);
+        paint.setColor(Color.argb(70, 205, 157, 76));
+        c.drawCircle(w * 0.84f, h * 0.16f, 25f, paint);
     }
 
     private void drawWorld(Canvas c) {
@@ -1224,21 +1238,32 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private void drawPlayer(Canvas c) {
         paint.setColor(Color.argb(95, 0, 0, 0));
         c.drawOval(px - 19f, py + 11f, px + 19f, py + 25f, paint);
-        int col = invuln > 0f && ((int) (elapsed * 24f) % 2 == 0) ? Color.WHITE : Color.rgb(80, 225, 155);
+        // Le joueur est le seigneur des ombres : cape, armure noire et couronne.
+        Path cape = new Path();
+        cape.moveTo(px - 17f, py + 4f); cape.lineTo(px - 28f, py + 25f);
+        cape.lineTo(px + 28f, py + 25f); cape.lineTo(px + 17f, py + 4f); cape.close();
+        paint.setColor(Color.rgb(47, 18, 55)); c.drawPath(cape, paint);
+        int col = invuln > 0f && ((int) (elapsed * 24f) % 2 == 0) ? Color.WHITE : Color.rgb(43, 39, 58);
         paint.setColor(col);
         c.drawCircle(px, py, 18f, paint);
         stroke.setColor(Color.WHITE);
         stroke.setStrokeWidth(3f);
         c.drawCircle(px, py, 18f, stroke);
-        paint.setColor(Color.rgb(12, 39, 34));
+        paint.setColor(Color.rgb(255, 74, 74));
         float eyeX = px + lastMoveX * 7f;
         float eyeY = py + lastMoveY * 7f;
-        c.drawCircle(eyeX, eyeY, 4f, paint);
+        c.drawCircle(eyeX, eyeY, 3f, paint);
+        Path horns = new Path();
+        horns.moveTo(px - 12f, py - 12f); horns.lineTo(px - 19f, py - 27f); horns.lineTo(px - 4f, py - 16f);
+        horns.moveTo(px + 12f, py - 12f); horns.lineTo(px + 19f, py - 27f); horns.lineTo(px + 4f, py - 16f);
+        paint.setColor(Color.rgb(175, 122, 66)); c.drawPath(horns, paint);
     }
 
     private void drawEnemy(Canvas c, Enemy e) {
         paint.setColor(Color.argb(95, 0, 0, 0));
         c.drawOval(e.x - e.r, e.y + e.r * 0.45f, e.x + e.r, e.y + e.r * 1.05f, paint);
+        float bob = (float) Math.sin(elapsed * 4.5f + e.x * 0.01f) * (e.type == ENEMY_BOSS ? 2f : 1.5f);
+        c.save(); c.translate(0f, bob);
         int color = e.flash > 0f ? Color.WHITE : colorForEnemy(e.type);
         paint.setColor(color);
         switch (e.type) {
@@ -1246,15 +1271,22 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 c.save();
                 c.rotate(45f, e.x, e.y);
                 c.drawRect(e.x - e.r * 0.72f, e.y - e.r * 0.72f, e.x + e.r * 0.72f, e.y + e.r * 0.72f, paint);
+                paint.setColor(Color.WHITE); c.drawRect(e.x - 2f, e.y - e.r, e.x + 2f, e.y + e.r, paint);
                 c.restore();
                 break;
             case ENEMY_TANK:
                 c.drawRoundRect(e.x - e.r, e.y - e.r, e.x + e.r, e.y + e.r, 8f, 8f, paint);
+                paint.setColor(Color.rgb(230, 210, 164)); c.drawRect(e.x - 3f, e.y - e.r - 8f, e.x + 3f, e.y + e.r + 8f, paint);
                 break;
             case ENEMY_SHOOTER:
                 c.drawCircle(e.x, e.y, e.r, paint);
                 stroke.setColor(Color.rgb(255, 170, 255));
                 c.drawCircle(e.x, e.y, e.r + 5f, stroke);
+                break;
+            case ENEMY_MINIBOSS:
+                c.drawRoundRect(e.x - e.r, e.y - e.r, e.x + e.r, e.y + e.r, 12f, 12f, paint);
+                paint.setColor(Color.rgb(234, 196, 112)); c.drawRect(e.x - e.r - 5f, e.y - 4f, e.x + e.r + 5f, e.y + 4f, paint);
+                stroke.setColor(Color.rgb(255, 221, 117)); stroke.setStrokeWidth(5f); c.drawCircle(e.x, e.y, e.r + 7f, stroke);
                 break;
             case ENEMY_BOSS:
                 c.drawCircle(e.x, e.y, e.r, paint);
@@ -1269,8 +1301,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 break;
             default:
                 c.drawCircle(e.x, e.y, e.r, paint);
+                paint.setColor(Color.rgb(220, 215, 190)); c.drawRect(e.x - 3f, e.y - e.r - 4f, e.x + 3f, e.y + e.r + 4f, paint);
         }
-        if (e.type == ENEMY_TANK || e.type == ENEMY_SHOOTER || e.type == ENEMY_BOSS) {
+        c.restore();
+        if (e.type == ENEMY_TANK || e.type == ENEMY_SHOOTER || e.type == ENEMY_MINIBOSS || e.type == ENEMY_BOSS) {
             float bw = e.type == ENEMY_BOSS ? 100f : e.r * 2f;
             float ratio = Math.max(0f, e.hp / e.maxHp);
             paint.setColor(Color.argb(150, 0, 0, 0));
@@ -1282,11 +1316,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
 
     private int colorForEnemy(int type) {
         switch (type) {
-            case ENEMY_FAST: return Color.rgb(255, 174, 70);
-            case ENEMY_TANK: return Color.rgb(93, 127, 170);
-            case ENEMY_SHOOTER: return Color.rgb(210, 85, 220);
-            case ENEMY_BOSS: return Color.rgb(186, 70, 78);
-            default: return Color.rgb(235, 82, 82);
+            case ENEMY_FAST: return Color.rgb(128, 179, 223);
+            case ENEMY_TANK: return Color.rgb(88, 112, 150);
+            case ENEMY_SHOOTER: return Color.rgb(191, 116, 213);
+            case ENEMY_MINIBOSS: return Color.rgb(177, 65, 57);
+            case ENEMY_BOSS: return Color.rgb(116, 35, 43);
+            default: return Color.rgb(178, 178, 158);
         }
     }
 

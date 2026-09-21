@@ -319,34 +319,34 @@ public class GameViewFinal extends GameViewPro {
     private void drawMainMenu(Canvas c) {
         int w = getWidth(), h = getHeight();
         float scale = uiScale();
-        ui.setColor(Color.rgb(8, 14, 18));
+        ui.setColor(Color.rgb(12, 8, 18));
         c.drawRect(0, 0, w, h, ui);
-        ui.setColor(Color.argb(36, 60, 210, 230));
+        ui.setColor(Color.argb(48, 132, 44, 145));
         c.drawCircle(w * 0.18f, h * 0.20f, w * 0.42f, ui);
-        ui.setColor(Color.argb(26, 220, 90, 130));
+        ui.setColor(Color.argb(34, 220, 151, 58));
         c.drawCircle(w * 0.92f, h * 0.48f, w * 0.55f, ui);
 
         ui.setTextAlign(Paint.Align.CENTER);
         ui.setFakeBoldText(true);
-        ui.setColor(Color.WHITE);
+        ui.setColor(Color.rgb(243, 222, 183));
         ui.setTextSize(Math.min(48f * scale, w * 0.115f));
         c.drawText("MEGAMOBILE", w / 2f, h * 0.23f, ui);
         ui.setTextSize(16f * scale);
-        ui.setColor(Color.rgb(130, 225, 235));
-        c.drawText("SURVIS • ÉVOLUE • VA TOUJOURS PLUS LOIN", w / 2f, h * 0.27f, ui);
+        ui.setColor(Color.rgb(205, 88, 93));
+        c.drawText("LE SEIGNEUR DES OMBRES", w / 2f, h * 0.27f, ui);
 
         ui.setFakeBoldText(false);
         ui.setColor(Color.rgb(205, 217, 220));
         ui.setTextSize(15f * scale);
-        c.drawText("Portrait • commandes tactiles • mises à jour live", w / 2f, h * 0.34f, ui);
+        c.drawText("Affronte les héros • conquiers leurs royaumes", w / 2f, h * 0.34f, ui);
         c.drawText("Le joystick apparaît là où tu poses le pouce.", w / 2f, h * 0.38f, ui);
 
         float margin = 30f * scale;
         float top = h * 0.49f;
         playRect.set(margin, top, w - margin, top + 88f * scale);
-        ui.setColor(Color.rgb(40, 166, 116));
+        ui.setColor(Color.rgb(86, 28, 92));
         c.drawRoundRect(playRect, 24f * scale, 24f * scale, ui);
-        stroke.setColor(Color.rgb(125, 245, 195)); stroke.setStrokeWidth(3f * scale);
+        stroke.setColor(Color.rgb(220, 145, 76)); stroke.setStrokeWidth(3f * scale);
         c.drawRoundRect(playRect, 24f * scale, 24f * scale, stroke);
         ui.setFakeBoldText(true); ui.setColor(Color.WHITE); ui.setTextSize(25f * scale);
         c.drawText("JOUER", w / 2f, playRect.centerY() + 9f * scale, ui);
@@ -354,7 +354,7 @@ public class GameViewFinal extends GameViewPro {
         ui.setTextSize(17f * scale); ui.setColor(Color.rgb(225, 230, 232));
         c.drawText("Record : " + bestScore, w / 2f, playRect.bottom + 44f * scale, ui);
         ui.setFakeBoldText(false); ui.setTextSize(13f * scale); ui.setColor(Color.rgb(150, 168, 172));
-        c.drawText("V1.2 • HUD compact, synergies et révélations", w / 2f, h - 42f * scale, ui);
+        c.drawText("V1.3 • ROYAUME DES OMBRES", w / 2f, h - 42f * scale, ui);
         ui.setFakeBoldText(false);
     }
 
