@@ -24,6 +24,20 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private static final int ENEMY_SHOOTER = 3;
     private static final int ENEMY_BOSS = 4;
 
+    protected static final int CHEST_STANDARD = 0;
+    protected static final int CHEST_WEAPON = 1;
+    protected static final int CHEST_ARTIFACT = 2;
+    private static final int CHOICE_LEVEL = 0;
+    private static final int CHOICE_STANDARD = 1;
+    private static final int CHOICE_WEAPON = 2;
+    private static final int CHOICE_ARTIFACT = 3;
+
+    private static final int OBJECTIVE_CHEST = 0;
+    private static final int OBJECTIVE_CAPTURE = 1;
+    private static final int OBJECTIVE_HIDEOUT = 2;
+    private static final int OBJECTIVE_SECRET = 3;
+    private static final int OBJECTIVE_BONUS = 4;
+
     private static final int SHOT_PLAYER = 0;
     private static final int SHOT_ROCKET = 1;
     private static final int SHOT_ENEMY = 2;
@@ -37,6 +51,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private final ArrayList<Shot> shots = new ArrayList<>();
     private final ArrayList<Gem> gems = new ArrayList<>();
     private final ArrayList<Chest> chests = new ArrayList<>();
+    private final ArrayList<WorldObjective> worldObjectives = new ArrayList<>();
     private final ArrayList<Particle> particles = new ArrayList<>();
     private final ArrayList<FloatingText> texts = new ArrayList<>();
     private final ArrayList<ArcFx> arcs = new ArrayList<>();
@@ -93,15 +108,26 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private float camX;
     private float camY;
 
+    private boolean worldReady;
+    private int worldStage = 1;
+    private float worldRadius;
+    private float previousWorldRadius;
+    private int nextObjectiveId = 1;
+
     private int joystickPointer = -1;
     private float joyStartX;
     private float joyStartY;
     private float joyX;
     private float joyY;
-    private final float joyRadius = 95f;
+    private float joyRadius = 95f;
 
     private final ArrayList<Upgrade> currentChoices = new ArrayList<>();
     private boolean chestChoice;
+    private int choiceSource = CHOICE_LEVEL;
+    private boolean chestRevealing;
+    private float chestRevealTime;
+    private int chestRevealRarity;
+    private int chestRevealKind;
     private final RectF[] choiceRects = {new RectF(), new RectF(), new RectF()};
     private final RectF dashRect = new RectF();
     private final RectF pauseRect = new RectF();
@@ -139,11 +165,23 @@ public class GameView extends View implements Choreographer.FrameCallback {
         running = false;
     }
 
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        joyRadius = 88f * uiScale(w, h);
+        if (!worldReady && w > 0 && h > 0) ensureWorldReady();
+    }
+
+    private float uiScale(int w, int h) {
+        return Math.max(1f, Math.min(w / 420f, h / 820f));
+    }
+
     private void resetGame() {
         enemies.clear();
         shots.clear();
         gems.clear();
         chests.clear();
+        worldObjectives.clear();
         particles.clear();
         texts.clear();
         arcs.clear();
@@ -176,10 +214,20 @@ public class GameView extends View implements Choreographer.FrameCallback {
         lastMoveX = 0f;
         lastMoveY = -1f;
         camX = camY = 0f;
+        worldReady = false;
+        worldStage = 1;
+        worldRadius = 0f;
+        previousWorldRadius = 0f;
+        nextObjectiveId = 1;
         paused = false;
         dead = false;
         choosing = false;
         chestChoice = false;
+        choiceSource = CHOICE_LEVEL;
+        chestRevealing = false;
+        chestRevealTime = 0f;
+        chestRevealRarity = 0;
+        chestRevealKind = CHEST_STANDARD;
         currentChoices.clear();
         banner = "SURVIS";
         bannerLife = 1.8f;
@@ -199,6 +247,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void update(float dt) {
+        ensureWorldReady();
         elapsed += dt;
         difficulty = 1f + elapsed / Math.max(25f, remote.difficultySeconds)
                 + (float) Math.pow(elapsed / 360f, 1.35) * 0.7f;
@@ -221,6 +270,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
         }
         px += nx * speed * dt;
         py += ny * speed * dt;
+        clampPlayerToWorld();
+        updateWorldObjectives(dt);
 
         float desiredCamX = px + lastMoveX * 45f;
         float desiredCamY = py + lastMoveY * 75f;
@@ -465,12 +516,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void updateChests() {
-        if (choosing) return;
+        if (choosing || chestRevealing) return;
         for (int i = chests.size() - 1; i >= 0; i--) {
             Chest chest = chests.get(i);
             if (distanceSq(px, py, chest.x, chest.y) < 52f * 52f) {
                 chests.remove(i);
-                startChoice(true);
+                markObjectiveComplete(chest.objectiveId);
+                startChestReveal(chest.kind);
                 break;
             }
         }
@@ -497,7 +549,136 @@ public class GameView extends View implements Choreographer.FrameCallback {
             a.life -= dt;
             if (a.life <= 0f) arcs.remove(i);
         }
+        if (chestRevealing) {
+            chestRevealTime += dt;
+            if (chestRevealTime >= 1.55f) finishChestReveal();
+        }
         if (bannerLife > 0f && (paused || dead || choosing)) bannerLife -= dt;
+    }
+
+    private void ensureWorldReady() {
+        if (worldReady || getWidth() <= 0 || getHeight() <= 0) return;
+        worldReady = true;
+        worldStage = 1;
+        previousWorldRadius = 0f;
+        worldRadius = Math.max(getWidth(), getHeight()) * 0.88f;
+        generateWorldStage();
+    }
+
+    private void generateWorldStage() {
+        worldObjectives.clear();
+        int[] types = {
+                OBJECTIVE_CHEST,
+                OBJECTIVE_CAPTURE,
+                OBJECTIVE_HIDEOUT,
+                OBJECTIVE_SECRET,
+                OBJECTIVE_BONUS,
+                OBJECTIVE_CHEST
+        };
+        float inner = worldStage == 1 ? worldRadius * 0.25f : previousWorldRadius + (worldRadius - previousWorldRadius) * 0.22f;
+        float outer = worldRadius * 0.80f;
+        float phase = random.nextFloat() * (float) (Math.PI * 2.0);
+        for (int i = 0; i < types.length; i++) {
+            float angle = phase + (float) (Math.PI * 2.0 * i / types.length) + (random.nextFloat() - 0.5f) * 0.28f;
+            float distance = inner + (outer - inner) * (0.28f + random.nextFloat() * 0.68f);
+            WorldObjective objective = new WorldObjective(nextObjectiveId++, types[i],
+                    (float) Math.cos(angle) * distance,
+                    (float) Math.sin(angle) * distance);
+            objective.revealed = objective.type != OBJECTIVE_SECRET;
+            worldObjectives.add(objective);
+            if (objective.type == OBJECTIVE_CHEST) {
+                addChest(objective.x, objective.y, CHEST_STANDARD, objective.id);
+            }
+        }
+    }
+
+    private void updateWorldObjectives(float dt) {
+        if (!worldReady || worldObjectives.isEmpty()) return;
+        for (WorldObjective objective : worldObjectives) {
+            if (objective.complete) continue;
+            float distance = (float) Math.sqrt(distanceSq(px, py, objective.x, objective.y));
+            if (!objective.revealed && distance < 210f) {
+                objective.revealed = true;
+                showBanner("SECRET DÉCOUVERT");
+            }
+            if (!objective.revealed || objective.type == OBJECTIVE_CHEST) continue;
+
+            if (objective.type == OBJECTIVE_CAPTURE) {
+                if (distance <= 118f) objective.progress += dt;
+                else objective.progress = Math.max(0f, objective.progress - dt * 0.35f);
+                if (objective.progress >= 4f) {
+                    completeWorldObjective(objective, "ZONE CAPTURÉE");
+                    dropChest(objective.x, objective.y, CHEST_STANDARD);
+                }
+            } else if (objective.type == OBJECTIVE_HIDEOUT) {
+                if (!objective.activated && distance < 260f) {
+                    objective.activated = true;
+                    for (int i = 0; i < 6 + worldStage; i++) spawnEnemy(false);
+                    showBanner("CACHE DÉFENDUE");
+                }
+                if (objective.activated && distance <= 105f) objective.progress += dt;
+                if (objective.progress >= 3f) {
+                    completeWorldObjective(objective, "CACHE RÉCUPÉRÉE");
+                    dropChest(objective.x, objective.y, random.nextFloat() < 0.35f ? CHEST_ARTIFACT : CHEST_STANDARD);
+                }
+            } else if (objective.type == OBJECTIVE_SECRET && distance <= 58f) {
+                completeWorldObjective(objective, "SECRET RÉCUPÉRÉ");
+                dropChest(objective.x, objective.y, CHEST_STANDARD);
+            } else if (objective.type == OBJECTIVE_BONUS && distance <= 62f) {
+                hp = Math.min(maxHp, hp + Math.max(32f, maxHp * 0.30f));
+                invuln = Math.max(invuln, 1.8f);
+                score += 300 * worldStage;
+                completeWorldObjective(objective, "ZONE BONUS ACTIVÉE");
+            }
+        }
+        expandIfStageComplete();
+    }
+
+    private void completeWorldObjective(WorldObjective objective, String message) {
+        if (objective.complete) return;
+        objective.complete = true;
+        objective.progress = 4f;
+        score += 180 * worldStage;
+        showBanner(message);
+    }
+
+    private void markObjectiveComplete(int objectiveId) {
+        if (objectiveId < 0) return;
+        for (WorldObjective objective : worldObjectives) {
+            if (objective.id == objectiveId) {
+                completeWorldObjective(objective, "COFFRE DE ZONE RÉCUPÉRÉ");
+                break;
+            }
+        }
+        expandIfStageComplete();
+    }
+
+    private void expandIfStageComplete() {
+        if (worldObjectives.isEmpty()) return;
+        for (WorldObjective objective : worldObjectives) if (!objective.complete) return;
+        previousWorldRadius = worldRadius;
+        worldStage++;
+        worldRadius += Math.max(getWidth(), getHeight()) * 0.58f;
+        score += 750 * worldStage;
+        generateWorldStage();
+        showBanner("CARTE AGRANDIE — ZONE " + worldStage);
+    }
+
+    private void clampPlayerToWorld() {
+        if (!worldReady || worldRadius <= 0f) return;
+        float distance = (float) Math.hypot(px, py);
+        float limit = Math.max(120f, worldRadius - 42f);
+        if (distance <= limit || distance <= 0f) return;
+        px = px / distance * limit;
+        py = py / distance * limit;
+    }
+
+    private void addChest(float x, float y, int kind, int objectiveId) {
+        chests.add(new Chest(x, y, kind, objectiveId));
+    }
+
+    protected final void dropChest(float x, float y, int kind) {
+        addChest(x, y, kind, -1);
     }
 
     private void spawnEnemy(boolean boss) {
@@ -505,6 +686,14 @@ public class GameView extends View implements Choreographer.FrameCallback {
         float angle = random.nextFloat() * (float) (Math.PI * 2.0);
         float x = px + (float) Math.cos(angle) * screenRadius;
         float y = py + (float) Math.sin(angle) * screenRadius;
+        if (worldReady) {
+            float distance = (float) Math.hypot(x, y);
+            float limit = Math.max(140f, worldRadius - 55f);
+            if (distance > limit && distance > 0f) {
+                x = x / distance * limit;
+                y = y / distance * limit;
+            }
+        }
 
         int type;
         if (boss) type = ENEMY_BOSS;
@@ -558,8 +747,14 @@ public class GameView extends View implements Choreographer.FrameCallback {
         gems.add(new Gem(e.x, e.y, value));
         burst(e.x, e.y, colorForEnemy(e.type), e.type == ENEMY_BOSS ? 34 : 10);
         if (e.type == ENEMY_BOSS) {
-            chests.add(new Chest(e.x, e.y));
-            showBanner("COFFRE !");
+            dropChest(e.x, e.y, CHEST_WEAPON);
+            showBanner("ARME DE BOSS À RÉCUPÉRER");
+        } else {
+            float chestChance = Math.min(0.055f, 0.012f + difficulty * 0.0022f);
+            if (random.nextFloat() < chestChance) {
+                dropChest(e.x, e.y, CHEST_STANDARD);
+                showBanner("COFFRE LÂCHÉ");
+            }
         }
     }
 
@@ -581,10 +776,37 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void startChoice(boolean fromChest) {
+        beginChoice(fromChest ? CHOICE_STANDARD : CHOICE_LEVEL, -1);
+    }
+
+    private void startChestReveal(int chestKind) {
         choosing = true;
-        chestChoice = fromChest;
+        chestChoice = true;
+        chestRevealing = true;
+        chestRevealTime = 0f;
+        chestRevealKind = chestKind;
+        choiceSource = chestKind == CHEST_WEAPON ? CHOICE_WEAPON
+                : chestKind == CHEST_ARTIFACT ? CHOICE_ARTIFACT : CHOICE_STANDARD;
+        chestRevealRarity = rollRarity(choiceSource);
         // Une sélection automatique ne doit pas simuler un relâchement du doigt :
         // le joueur reprend ainsi immédiatement sa trajectoire après le choix.
+        if (!autoChoice) {
+            moveX = moveY = 0f;
+            joystickPointer = -1;
+        }
+        currentChoices.clear();
+    }
+
+    private void finishChestReveal() {
+        if (!chestRevealing) return;
+        chestRevealing = false;
+        beginChoice(choiceSource, chestRevealRarity);
+    }
+
+    private void beginChoice(int source, int forcedRarity) {
+        choosing = true;
+        choiceSource = source;
+        chestChoice = source != CHOICE_LEVEL;
         if (!autoChoice) {
             moveX = moveY = 0f;
             joystickPointer = -1;
@@ -594,7 +816,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
             Upgrade candidate;
             int guard = 0;
             do {
-                candidate = randomUpgrade(fromChest);
+                candidate = randomUpgrade(source, forcedRarity);
                 guard++;
             } while (containsCode(candidate.code) && guard < 30);
             currentChoices.add(candidate);
@@ -615,30 +837,52 @@ public class GameView extends View implements Choreographer.FrameCallback {
         return false;
     }
 
-    private Upgrade randomUpgrade(boolean chest) {
-        int rarity = rollRarity(chest);
+    private Upgrade randomUpgrade(int source, int forcedRarity) {
+        int rarity = forcedRarity >= 0 ? forcedRarity : rollRarity(source);
         String[] base = {"DMG", "FIRE", "SPEED", "HP", "MAGNET", "CRIT", "ARMOR", "REGEN", "RANGE", "MULTI"};
         ArrayList<String> codes = new ArrayList<>();
-        Collections.addAll(codes, base);
-        codes.add("AURA");
-        codes.add("ORBIT");
-        codes.add("LIGHTNING");
-        codes.add("ROCKET");
-        codes.add("HEAL");
-        if (chest) {
-            codes.add("MULTI");
+        if (source == CHOICE_WEAPON) {
             codes.add("AURA");
             codes.add("ORBIT");
             codes.add("LIGHTNING");
             codes.add("ROCKET");
+        } else if (source == CHOICE_ARTIFACT) {
+            codes.add("ART_CROWN");
+            codes.add("ART_WARD");
+            codes.add("ART_COMPASS");
+            codes.add("ART_HOURGLASS");
+        } else {
+            Collections.addAll(codes, base);
+            codes.add("AURA");
+            codes.add("ORBIT");
+            codes.add("LIGHTNING");
+            codes.add("ROCKET");
+            codes.add("HEAL");
+            if (source == CHOICE_STANDARD) {
+                codes.add("MULTI");
+                codes.add("AURA");
+                codes.add("ORBIT");
+                codes.add("LIGHTNING");
+                codes.add("ROCKET");
+            }
         }
         String code = codes.get(random.nextInt(codes.size()));
         return new Upgrade(code, rarity, titleFor(code), descriptionFor(code, rarity));
     }
 
-    private int rollRarity(boolean chest) {
+    private int rollRarity(int source) {
         float r = random.nextFloat();
-        if (chest) {
+        if (source == CHOICE_ARTIFACT) {
+            if (r < 0.18f) return 3;
+            if (r < 0.64f) return 2;
+            return 1;
+        }
+        if (source == CHOICE_WEAPON) {
+            if (r < 0.14f) return 3;
+            if (r < 0.52f) return 2;
+            return 1;
+        }
+        if (source == CHOICE_STANDARD) {
             if (r < 0.08f) return 3;
             if (r < 0.33f) return 2;
             if (r < 0.78f) return 1;
@@ -667,6 +911,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "LIGHTNING": return lightningLevel == 0 ? "NOUVELLE ARME : FOUDRE" : "FOUDRE +";
             case "ROCKET": return rocketLevel == 0 ? "NOUVELLE ARME : ROQUETTES" : "ROQUETTES +";
             case "HEAL": return "SOINS";
+            case "ART_CROWN": return "ARTEFACT : COURONNE";
+            case "ART_WARD": return "ARTEFACT : ÉGIDE";
+            case "ART_COMPASS": return "ARTEFACT : BOUSSOLE";
+            case "ART_HOURGLASS": return "ARTEFACT : SABLIER";
             default: return code;
         }
     }
@@ -689,6 +937,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "LIGHTNING": return "Éclairs en chaîne automatiques";
             case "ROCKET": return "Roquettes chercheuses explosives";
             case "HEAL": return "Récupère " + Math.round(28f * m) + "% des PV";
+            case "ART_CROWN": return "Dégâts et critique fortement augmentés";
+            case "ART_WARD": return "PV, armure et régénération augmentés";
+            case "ART_COMPASS": return "Vitesse, portée et attraction augmentées";
+            case "ART_HOURGLASS": return "Cadence accélérée et dash plus fréquent";
             default: return "Amélioration";
         }
     }
@@ -728,9 +980,31 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "LIGHTNING": lightningLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
             case "ROCKET": rocketLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
             case "HEAL": hp = Math.min(maxHp, hp + maxHp * Math.min(1f, 0.28f * m)); break;
+            case "ART_CROWN":
+                damage *= 1f + 0.15f * m;
+                crit = Math.min(0.85f, crit + 0.045f * m);
+                break;
+            case "ART_WARD":
+                float wardHp = 14f * m;
+                maxHp += wardHp;
+                hp = Math.min(maxHp, hp + wardHp);
+                armor += 7f * m;
+                regen += 0.28f * m;
+                break;
+            case "ART_COMPASS":
+                speed *= 1f + 0.065f * m;
+                range *= 1f + 0.085f * m;
+                magnet += 34f * m;
+                break;
+            case "ART_HOURGLASS":
+                fireInterval = Math.max(0.085f, fireInterval / (1f + 0.10f * m));
+                dashCd = Math.max(0f, dashCd - 0.55f * m);
+                break;
         }
         choosing = false;
         chestChoice = false;
+        chestRevealing = false;
+        choiceSource = CHOICE_LEVEL;
         currentChoices.clear();
         showBanner(u.title);
     }
@@ -831,6 +1105,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void drawWorld(Canvas c) {
+        drawWorldMap(c);
         for (Gem g : gems) drawGem(c, g);
         for (Chest chest : chests) drawChest(c, chest);
         for (Shot s : shots) drawShot(c, s);
@@ -850,6 +1125,72 @@ public class GameView extends View implements Choreographer.FrameCallback {
             c.drawText(String.valueOf(t.value), t.x, t.y, paint);
             paint.setFakeBoldText(false);
         }
+    }
+
+    private void drawWorldMap(Canvas c) {
+        if (!worldReady) return;
+        paint.setColor(Color.rgb(19, 34, 34));
+        c.drawCircle(0f, 0f, worldRadius, paint);
+        if (previousWorldRadius > 0f) {
+            stroke.setColor(Color.argb(70, 105, 205, 180));
+            stroke.setStrokeWidth(3f);
+            c.drawCircle(0f, 0f, previousWorldRadius, stroke);
+        }
+        stroke.setColor(Color.rgb(85, 225, 180));
+        stroke.setStrokeWidth(8f);
+        c.drawCircle(0f, 0f, worldRadius, stroke);
+        stroke.setColor(Color.argb(70, 85, 225, 180));
+        stroke.setStrokeWidth(24f);
+        c.drawCircle(0f, 0f, worldRadius - 12f, stroke);
+
+        for (WorldObjective objective : worldObjectives) {
+            if (objective.complete || !objective.revealed) continue;
+            float pulse = 1f + (float) Math.sin(elapsed * 3.2f + objective.id) * 0.06f;
+            if (objective.type == OBJECTIVE_CAPTURE) {
+                paint.setColor(Color.argb(45, 70, 205, 255));
+                c.drawCircle(objective.x, objective.y, 118f, paint);
+                stroke.setColor(Color.rgb(85, 215, 255));
+                stroke.setStrokeWidth(5f);
+                c.drawCircle(objective.x, objective.y, 118f, stroke);
+                RectF progress = new RectF(objective.x - 100f, objective.y - 100f,
+                        objective.x + 100f, objective.y + 100f);
+                c.drawArc(progress, -90f, Math.min(1f, objective.progress / 4f) * 360f, false, stroke);
+                drawWorldLabel(c, objective.x, objective.y + 6f, "CAPTURE", Color.rgb(110, 225, 255));
+            } else if (objective.type == OBJECTIVE_HIDEOUT) {
+                paint.setColor(Color.argb(210, 82, 62, 42));
+                c.drawRoundRect(objective.x - 54f * pulse, objective.y - 42f * pulse,
+                        objective.x + 54f * pulse, objective.y + 42f * pulse, 12f, 12f, paint);
+                stroke.setColor(Color.rgb(235, 178, 95));
+                stroke.setStrokeWidth(5f);
+                c.drawRoundRect(objective.x - 54f, objective.y - 42f,
+                        objective.x + 54f, objective.y + 42f, 12f, 12f, stroke);
+                drawWorldLabel(c, objective.x, objective.y + 7f, "CACHE", Color.rgb(255, 205, 120));
+            } else if (objective.type == OBJECTIVE_SECRET) {
+                paint.setColor(Color.argb(80, 215, 110, 255));
+                c.drawCircle(objective.x, objective.y, 48f * pulse, paint);
+                drawWorldLabel(c, objective.x, objective.y + 12f, "?", Color.rgb(235, 145, 255));
+            } else if (objective.type == OBJECTIVE_BONUS) {
+                paint.setColor(Color.argb(75, 100, 255, 145));
+                c.drawCircle(objective.x, objective.y, 52f * pulse, paint);
+                stroke.setColor(Color.rgb(110, 245, 150));
+                stroke.setStrokeWidth(5f);
+                c.drawCircle(objective.x, objective.y, 32f * pulse, stroke);
+                drawWorldLabel(c, objective.x, objective.y + 8f, "+", Color.rgb(140, 255, 175));
+            } else if (objective.type == OBJECTIVE_CHEST) {
+                stroke.setColor(Color.argb(150, 255, 218, 90));
+                stroke.setStrokeWidth(4f);
+                c.drawCircle(objective.x, objective.y, 62f * pulse, stroke);
+            }
+        }
+    }
+
+    private void drawWorldLabel(Canvas c, float x, float y, String label, int color) {
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setFakeBoldText(true);
+        paint.setTextSize(20f);
+        paint.setColor(color);
+        c.drawText(label, x, y, paint);
+        paint.setFakeBoldText(false);
     }
 
     private void drawPlayer(Canvas c) {
@@ -932,11 +1273,16 @@ public class GameView extends View implements Choreographer.FrameCallback {
 
     private void drawChest(Canvas c, Chest chest) {
         float pulse = 1f + (float) Math.sin(elapsed * 5f) * 0.06f;
-        paint.setColor(Color.argb(80, 255, 210, 40));
+        int glow = chest.kind == CHEST_WEAPON ? Color.rgb(255, 120, 75)
+                : chest.kind == CHEST_ARTIFACT ? Color.rgb(215, 105, 255)
+                : Color.rgb(255, 210, 70);
+        paint.setColor(withAlpha(glow, 80));
         c.drawCircle(chest.x, chest.y, 42f * pulse, paint);
-        paint.setColor(Color.rgb(132, 75, 30));
+        paint.setColor(chest.kind == CHEST_WEAPON ? Color.rgb(145, 55, 36)
+                : chest.kind == CHEST_ARTIFACT ? Color.rgb(92, 48, 120)
+                : Color.rgb(132, 75, 30));
         c.drawRoundRect(chest.x - 24f, chest.y - 18f, chest.x + 24f, chest.y + 20f, 7f, 7f, paint);
-        paint.setColor(Color.rgb(255, 205, 55));
+        paint.setColor(glow);
         c.drawRect(chest.x - 24f, chest.y - 5f, chest.x + 24f, chest.y + 3f, paint);
         c.drawCircle(chest.x, chest.y + 5f, 5f, paint);
     }
@@ -992,74 +1338,87 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void drawHud(Canvas c, int w, int h) {
-        float top = 28f;
+        float scale = uiScale(w, h);
+        float pad = 18f * scale;
+        float top = 18f * scale;
         paint.setTextAlign(Paint.Align.LEFT);
         paint.setFakeBoldText(true);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(29f);
+        paint.setTextSize(26f * scale);
         int minutes = (int) elapsed / 60;
         int seconds = (int) elapsed % 60;
-        c.drawText(String.format(Locale.US, "%02d:%02d", minutes, seconds), 24f, top + 28f, paint);
-        paint.setTextSize(17f);
+        c.drawText(String.format(Locale.US, "%02d:%02d", minutes, seconds), pad, top + 27f * scale, paint);
+        paint.setTextSize(15f * scale);
         paint.setColor(Color.rgb(190, 210, 215));
-        c.drawText("Difficulté ×" + oneDecimal(difficulty), 25f, top + 52f, paint);
+        c.drawText("Difficulté ×" + oneDecimal(difficulty), pad, top + 50f * scale, paint);
 
-        pauseRect.set(w - 70f, 22f, w - 16f, 76f);
+        float pauseSize = 56f * scale;
+        pauseRect.set(w - pad - pauseSize, top, w - pad, top + pauseSize);
         paint.setColor(Color.argb(165, 20, 28, 31));
-        c.drawRoundRect(pauseRect, 16f, 16f, paint);
+        c.drawRoundRect(pauseRect, 16f * scale, 16f * scale, paint);
         paint.setColor(Color.WHITE);
-        c.drawRect(w - 54f, 37f, w - 48f, 61f, paint);
-        c.drawRect(w - 39f, 37f, w - 33f, 61f, paint);
+        float barW = 6f * scale;
+        float barH = 24f * scale;
+        c.drawRect(pauseRect.centerX() - 9f * scale, pauseRect.centerY() - barH / 2f,
+                pauseRect.centerX() - 9f * scale + barW, pauseRect.centerY() + barH / 2f, paint);
+        c.drawRect(pauseRect.centerX() + 3f * scale, pauseRect.centerY() - barH / 2f,
+                pauseRect.centerX() + 3f * scale + barW, pauseRect.centerY() + barH / 2f, paint);
 
-        float hpW = w - 48f;
-        float hpY = 92f;
+        float hpW = w - pad * 2f;
+        float hpY = 82f * scale;
+        float hpH = 18f * scale;
         paint.setColor(Color.argb(175, 0, 0, 0));
-        c.drawRoundRect(24f, hpY, 24f + hpW, hpY + 18f, 9f, 9f, paint);
+        c.drawRoundRect(pad, hpY, pad + hpW, hpY + hpH, 9f * scale, 9f * scale, paint);
         paint.setColor(Color.rgb(235, 72, 72));
-        c.drawRoundRect(24f, hpY, 24f + hpW * Math.max(0f, hp / maxHp), hpY + 18f, 9f, 9f, paint);
-        paint.setTextSize(14f);
+        c.drawRoundRect(pad, hpY, pad + hpW * Math.max(0f, hp / maxHp), hpY + hpH, 9f * scale, 9f * scale, paint);
+        paint.setTextSize(13f * scale);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setColor(Color.WHITE);
-        c.drawText(Math.round(hp) + " / " + Math.round(maxHp), w / 2f, hpY + 15f, paint);
+        c.drawText(Math.round(hp) + " / " + Math.round(maxHp), w / 2f, hpY + 14.5f * scale, paint);
 
-        float xpY = hpY + 26f;
+        float xpY = hpY + 26f * scale;
+        float xpH = 11f * scale;
         paint.setColor(Color.argb(175, 0, 0, 0));
-        c.drawRoundRect(24f, xpY, 24f + hpW, xpY + 11f, 6f, 6f, paint);
+        c.drawRoundRect(pad, xpY, pad + hpW, xpY + xpH, 6f * scale, 6f * scale, paint);
         paint.setColor(Color.rgb(65, 175, 255));
-        c.drawRoundRect(24f, xpY, 24f + hpW * Math.min(1f, xp / nextXp), xpY + 11f, 6f, 6f, paint);
+        c.drawRoundRect(pad, xpY, pad + hpW * Math.min(1f, xp / nextXp), xpY + xpH, 6f * scale, 6f * scale, paint);
 
         paint.setTextAlign(Paint.Align.LEFT);
-        paint.setTextSize(17f);
+        paint.setTextSize(15f * scale);
         paint.setColor(Color.WHITE);
-        c.drawText("Niv. " + level, 25f, xpY + 35f, paint);
-        c.drawText("☠ " + kills, 112f, xpY + 35f, paint);
-        c.drawText("Score " + score, 195f, xpY + 35f, paint);
+        float statsY = xpY + 34f * scale;
+        c.drawText("Niv. " + level, pad, statsY, paint);
+        c.drawText("☠ " + kills, pad + 83f * scale, statsY, paint);
+        c.drawText("Score " + score, pad + 155f * scale, statsY, paint);
 
-        autoRect.set(w - 112f, xpY + 16f, w - 18f, xpY + 48f);
+        autoRect.set(w - pad - 94f * scale, xpY + 16f * scale, w - pad, xpY + 52f * scale);
         paint.setColor(autoChoice ? Color.rgb(53, 150, 95) : Color.argb(160, 30, 40, 43));
-        c.drawRoundRect(autoRect, 10f, 10f, paint);
+        c.drawRoundRect(autoRect, 11f * scale, 11f * scale, paint);
         paint.setTextAlign(Paint.Align.CENTER);
-        paint.setTextSize(14f);
-        c.drawText(autoChoice ? "AUTO ✓" : "AUTO", autoRect.centerX(), autoRect.centerY() + 5f, paint);
+        paint.setTextSize(14f * scale);
+        c.drawText(autoChoice ? "AUTO ✓" : "AUTO", autoRect.centerX(), autoRect.centerY() + 5f * scale, paint);
 
-        float buttonR = Math.min(64f, w * 0.12f);
-        float bx = w - buttonR - 26f;
-        float by = h - buttonR - 38f;
+        drawMapHud(c, w, xpY + 67f * scale, scale);
+
+        float buttonR = Math.min(60f * scale, w * 0.145f);
+        float bx = w - buttonR - pad;
+        float by = h - buttonR - 26f * scale;
         dashRect.set(bx - buttonR, by - buttonR, bx + buttonR, by + buttonR);
         float ready = remote.dashCooldown <= 0f ? 1f : 1f - Math.max(0f, dashCd) / Math.max(0.1f, remote.dashCooldown);
         paint.setColor(dashCd <= 0f ? Color.argb(210, 55, 170, 210) : Color.argb(170, 38, 65, 74));
         c.drawCircle(bx, by, buttonR, paint);
         stroke.setColor(Color.WHITE);
-        stroke.setStrokeWidth(3f);
+        stroke.setStrokeWidth(3f * scale);
         c.drawCircle(bx, by, buttonR, stroke);
         paint.setTextAlign(Paint.Align.CENTER);
-        paint.setTextSize(20f);
+        paint.setTextSize(18f * scale);
         paint.setColor(Color.WHITE);
-        c.drawText(dashCd <= 0f ? "DASH" : oneDecimal(Math.max(0f, dashCd)), bx, by + 7f, paint);
+        c.drawText(dashCd <= 0f ? "DASH" : oneDecimal(Math.max(0f, dashCd)), bx, by + 6f * scale, paint);
         if (dashCd > 0f) {
             stroke.setColor(Color.argb(160, 120, 220, 255));
-            stroke.setStrokeWidth(7f);
-            RectF arc = new RectF(bx - buttonR + 7f, by - buttonR + 7f, bx + buttonR - 7f, by + buttonR - 7f);
+            stroke.setStrokeWidth(7f * scale);
+            RectF arc = new RectF(bx - buttonR + 7f * scale, by - buttonR + 7f * scale,
+                    bx + buttonR - 7f * scale, by + buttonR - 7f * scale);
             c.drawArc(arc, -90f, 360f * ready, false, stroke);
         }
 
@@ -1067,82 +1426,192 @@ public class GameView extends View implements Choreographer.FrameCallback {
             paint.setColor(Color.argb(65, 255, 255, 255));
             c.drawCircle(joyStartX, joyStartY, joyRadius, paint);
             stroke.setColor(Color.argb(150, 255, 255, 255));
-            stroke.setStrokeWidth(3f);
+            stroke.setStrokeWidth(3f * scale);
             c.drawCircle(joyStartX, joyStartY, joyRadius, stroke);
             paint.setColor(Color.argb(145, 255, 255, 255));
-            c.drawCircle(joyStartX + joyX * joyRadius, joyStartY + joyY * joyRadius, 36f, paint);
-        } else {
-            float jx = 94f;
-            float jy = h - 104f;
-            paint.setColor(Color.argb(24, 255, 255, 255));
-            c.drawCircle(jx, jy, 66f, paint);
-            stroke.setColor(Color.argb(70, 255, 255, 255));
-            stroke.setStrokeWidth(2f);
-            c.drawCircle(jx, jy, 66f, stroke);
+            c.drawCircle(joyStartX + joyX * joyRadius, joyStartY + joyY * joyRadius, 34f * scale, paint);
         }
         paint.setFakeBoldText(false);
+    }
+
+    private void drawMapHud(Canvas c, int w, float y, float scale) {
+        int complete = 0;
+        for (WorldObjective objective : worldObjectives) if (objective.complete) complete++;
+        float left = 18f * scale;
+        float right = Math.min(w - 18f * scale, left + 225f * scale);
+        RectF box = new RectF(left, y, right, y + 39f * scale);
+        paint.setColor(Color.argb(155, 18, 35, 36));
+        c.drawRoundRect(box, 12f * scale, 12f * scale, paint);
+        paint.setTextAlign(Paint.Align.LEFT);
+        paint.setFakeBoldText(true);
+        paint.setTextSize(13f * scale);
+        paint.setColor(Color.rgb(130, 235, 205));
+        c.drawText("ZONE " + worldStage + "   •   " + complete + "/" + worldObjectives.size(),
+                left + 12f * scale, y + 17f * scale, paint);
+        paint.setFakeBoldText(false);
+        paint.setTextSize(11f * scale);
+        paint.setColor(Color.rgb(205, 222, 220));
+        c.drawText("Explore tous les objectifs pour agrandir", left + 12f * scale, y + 32f * scale, paint);
+
+        float radius = 34f * scale;
+        float centerX = w - 18f * scale - radius;
+        float centerY = y + radius;
+        paint.setColor(Color.argb(175, 10, 22, 24));
+        c.drawCircle(centerX, centerY, radius, paint);
+        stroke.setColor(Color.argb(190, 105, 225, 190));
+        stroke.setStrokeWidth(2f * scale);
+        c.drawCircle(centerX, centerY, radius, stroke);
+        float mapScale = radius / Math.max(1f, worldRadius);
+        for (WorldObjective objective : worldObjectives) {
+            if (objective.complete || !objective.revealed) continue;
+            paint.setColor(objective.type == OBJECTIVE_CAPTURE ? Color.rgb(90, 220, 255)
+                    : objective.type == OBJECTIVE_HIDEOUT ? Color.rgb(245, 180, 95)
+                    : objective.type == OBJECTIVE_BONUS ? Color.rgb(100, 245, 145)
+                    : objective.type == OBJECTIVE_SECRET ? Color.rgb(225, 120, 255)
+                    : Color.rgb(255, 215, 75));
+            c.drawCircle(centerX + objective.x * mapScale, centerY + objective.y * mapScale,
+                    3.2f * scale, paint);
+        }
+        paint.setColor(Color.WHITE);
+        c.drawCircle(centerX + px * mapScale, centerY + py * mapScale, 3.8f * scale, paint);
     }
 
     private void drawChoices(Canvas c, int w, int h) {
         paint.setColor(Color.argb(220, 7, 11, 13));
         c.drawRect(0, 0, w, h, paint);
+        if (chestRevealing) {
+            drawChestReveal(c, w, h);
+            return;
+        }
+        float scale = uiScale(w, h);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setFakeBoldText(true);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(31f);
-        c.drawText(chestChoice ? "COFFRE" : "NIVEAU " + level, w / 2f, 90f, paint);
-        paint.setTextSize(17f);
+        paint.setTextSize(29f * scale);
+        String heading = choiceSource == CHOICE_WEAPON ? "ARME DE BOSS"
+                : choiceSource == CHOICE_ARTIFACT ? "COFFRE D'ARTEFACT"
+                : chestChoice ? "COFFRE" : "NIVEAU " + level;
+        c.drawText(heading, w / 2f, 74f * scale, paint);
+        paint.setTextSize(16f * scale);
         paint.setColor(Color.rgb(180, 200, 205));
-        c.drawText("Choisis une amélioration", w / 2f, 120f, paint);
+        c.drawText("Choisis avec le pouce", w / 2f, 101f * scale, paint);
 
-        float margin = 22f;
-        float cardH = Math.min(165f, (h - 205f) / 3f - 10f);
-        float startY = 155f;
+        float margin = 12f * scale;
+        float gap = 8f * scale;
+        float cardBottom = h - 24f * scale;
+        float cardTop = Math.max(h * 0.58f, cardBottom - 220f * scale);
+        float cardW = (w - margin * 2f - gap * 2f) / 3f;
         for (int i = 0; i < currentChoices.size() && i < 3; i++) {
             Upgrade u = currentChoices.get(i);
-            float y = startY + i * (cardH + 12f);
-            choiceRects[i].set(margin, y, w - margin, y + cardH);
+            float left = margin + i * (cardW + gap);
+            choiceRects[i].set(left, cardTop, left + cardW, cardBottom);
             paint.setColor(cardColor(u.rarity));
-            c.drawRoundRect(choiceRects[i], 24f, 24f, paint);
+            c.drawRoundRect(choiceRects[i], 20f * scale, 20f * scale, paint);
             stroke.setColor(rarityColor(u.rarity));
-            stroke.setStrokeWidth(4f);
-            c.drawRoundRect(choiceRects[i], 24f, 24f, stroke);
-            paint.setTextAlign(Paint.Align.LEFT);
+            stroke.setStrokeWidth(4f * scale);
+            c.drawRoundRect(choiceRects[i], 20f * scale, 20f * scale, stroke);
+            paint.setTextAlign(Paint.Align.CENTER);
             paint.setColor(rarityColor(u.rarity));
-            paint.setTextSize(14f);
-            c.drawText(rarityName(u.rarity), margin + 20f, y + 28f, paint);
+            paint.setTextSize(13f * scale);
+            c.drawText(rarityName(u.rarity), choiceRects[i].centerX(), cardTop + 27f * scale, paint);
             paint.setColor(Color.WHITE);
-            paint.setTextSize(22f);
-            c.drawText(u.title, margin + 20f, y + 61f, paint);
+            paint.setTextSize(16f * scale);
+            drawWrappedText(c, u.title, choiceRects[i].centerX(), cardTop + 57f * scale,
+                    cardW - 22f * scale, 19f * scale, 2);
             paint.setFakeBoldText(false);
             paint.setColor(Color.rgb(214, 224, 226));
-            paint.setTextSize(16f);
-            c.drawText(u.description, margin + 20f, y + 91f, paint);
+            paint.setTextSize(13f * scale);
+            drawWrappedText(c, u.description, choiceRects[i].centerX(), cardTop + 111f * scale,
+                    cardW - 22f * scale, 17f * scale, 3);
             paint.setFakeBoldText(true);
-            paint.setTextAlign(Paint.Align.RIGHT);
+            paint.setTextAlign(Paint.Align.CENTER);
             paint.setColor(Color.WHITE);
-            paint.setTextSize(15f);
-            c.drawText("TOUCHER", w - margin - 20f, y + cardH - 18f, paint);
+            paint.setTextSize(13f * scale);
+            c.drawText("CHOISIR", choiceRects[i].centerX(), cardBottom - 17f * scale, paint);
         }
         paint.setFakeBoldText(false);
     }
 
+    private void drawChestReveal(Canvas c, int w, int h) {
+        float scale = uiScale(w, h);
+        int shownRarity = chestRevealTime < 0.95f ? (int) (chestRevealTime * 13f) % 4 : chestRevealRarity;
+        int color = rarityColor(shownRarity);
+        float cx = w * 0.5f;
+        float cy = h * 0.56f;
+        float pulse = 1f + (float) Math.sin(chestRevealTime * 18f) * 0.09f;
+        paint.setColor(withAlpha(color, 45));
+        c.drawCircle(cx, cy, 132f * scale * pulse, paint);
+        paint.setColor(withAlpha(color, 85));
+        c.drawCircle(cx, cy, 90f * scale * pulse, paint);
+        stroke.setColor(color);
+        stroke.setStrokeWidth(7f * scale);
+        c.drawCircle(cx, cy, 70f * scale, stroke);
+
+        float lidLift = Math.min(1f, chestRevealTime / 1.05f) * 34f * scale;
+        paint.setColor(chestRevealKind == CHEST_WEAPON ? Color.rgb(145, 55, 36)
+                : chestRevealKind == CHEST_ARTIFACT ? Color.rgb(92, 48, 120)
+                : Color.rgb(132, 75, 30));
+        c.drawRoundRect(cx - 63f * scale, cy - 12f * scale,
+                cx + 63f * scale, cy + 58f * scale, 14f * scale, 14f * scale, paint);
+        paint.setColor(color);
+        c.drawRoundRect(cx - 68f * scale, cy - 40f * scale - lidLift,
+                cx + 68f * scale, cy - 5f * scale - lidLift, 12f * scale, 12f * scale, paint);
+
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setFakeBoldText(true);
+        paint.setColor(Color.WHITE);
+        paint.setTextSize(27f * scale);
+        c.drawText("OUVERTURE DU COFFRE", cx, 94f * scale, paint);
+        paint.setTextSize(18f * scale);
+        paint.setColor(Color.rgb(200, 215, 218));
+        c.drawText(chestRevealKind == CHEST_WEAPON ? "Récompense de boss"
+                : chestRevealKind == CHEST_ARTIFACT ? "Artefact d'élite"
+                : "Butin récupéré", cx, 126f * scale, paint);
+        paint.setTextSize(25f * scale);
+        paint.setColor(color);
+        c.drawText(rarityName(shownRarity), cx, cy + 116f * scale, paint);
+        paint.setFakeBoldText(false);
+    }
+
+    private void drawWrappedText(Canvas c, String text, float centerX, float firstBaseline,
+                                 float maxWidth, float lineHeight, int maxLines) {
+        String[] words = text.split(" ");
+        String line = "";
+        int lineIndex = 0;
+        for (String word : words) {
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (!line.isEmpty() && paint.measureText(candidate) > maxWidth) {
+                c.drawText(line, centerX, firstBaseline + lineIndex * lineHeight, paint);
+                lineIndex++;
+                if (lineIndex >= maxLines) return;
+                line = word;
+            } else {
+                line = candidate;
+            }
+        }
+        if (!line.isEmpty() && lineIndex < maxLines) {
+            c.drawText(line, centerX, firstBaseline + lineIndex * lineHeight, paint);
+        }
+    }
+
     private void drawPause(Canvas c, int w, int h) {
+        float scale = uiScale(w, h);
         paint.setColor(Color.argb(225, 7, 11, 13));
         c.drawRect(0, 0, w, h, paint);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setFakeBoldText(true);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(35f);
-        c.drawText("PAUSE", w / 2f, h * 0.25f, paint);
-        float bw = w - 80f;
-        float x1 = 40f;
-        float x2 = 40f + bw;
-        float y = h * 0.34f;
-        resumeRect.set(x1, y, x2, y + 64f);
-        soundRect.set(x1, y + 80f, x2, y + 144f);
-        restartRect.set(x1, y + 160f, x2, y + 224f);
-        quitRect.set(x1, y + 240f, x2, y + 304f);
+        paint.setTextSize(36f * scale);
+        c.drawText("PAUSE", w / 2f, h * 0.21f, paint);
+        float x1 = 28f * scale;
+        float x2 = w - 28f * scale;
+        float y = h * 0.29f;
+        float buttonH = 72f * scale;
+        float gap = 18f * scale;
+        resumeRect.set(x1, y, x2, y + buttonH);
+        soundRect.set(x1, y + buttonH + gap, x2, y + buttonH * 2f + gap);
+        restartRect.set(x1, y + (buttonH + gap) * 2f, x2, y + buttonH * 3f + gap * 2f);
+        quitRect.set(x1, y + (buttonH + gap) * 3f, x2, y + buttonH * 4f + gap * 3f);
         drawMenuButton(c, resumeRect, "REPRENDRE", Color.rgb(52, 145, 92));
         drawMenuButton(c, soundRect, soundOn ? "SON : OUI" : "SON : NON", Color.rgb(45, 77, 90));
         drawMenuButton(c, restartRect, "RECOMMENCER", Color.rgb(80, 70, 45));
@@ -1151,42 +1620,48 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void drawDeath(Canvas c, int w, int h) {
+        float scale = uiScale(w, h);
         paint.setColor(Color.argb(230, 10, 9, 11));
         c.drawRect(0, 0, w, h, paint);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setFakeBoldText(true);
         paint.setColor(Color.rgb(255, 90, 90));
-        paint.setTextSize(36f);
+        paint.setTextSize(34f * scale);
         c.drawText("PARTIE TERMINÉE", w / 2f, h * 0.31f, paint);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(20f);
+        paint.setTextSize(18f * scale);
         c.drawText("Niveau " + level + "   •   " + kills + " éliminations", w / 2f, h * 0.38f, paint);
-        paint.setTextSize(24f);
+        paint.setTextSize(23f * scale);
         c.drawText("Score " + score, w / 2f, h * 0.43f, paint);
-        restartRect.set(42f, h * 0.52f, w - 42f, h * 0.52f + 70f);
+        float margin = 30f * scale;
+        float buttonH = 76f * scale;
+        float gap = 22f * scale;
+        restartRect.set(margin, h * 0.52f, w - margin, h * 0.52f + buttonH);
         drawMenuButton(c, restartRect, "RECOMMENCER", Color.rgb(52, 145, 92));
-        quitRect.set(42f, h * 0.52f + 90f, w - 42f, h * 0.52f + 160f);
+        quitRect.set(margin, h * 0.52f + buttonH + gap, w - margin, h * 0.52f + buttonH * 2f + gap);
         drawMenuButton(c, quitRect, "QUITTER", Color.rgb(95, 48, 48));
         paint.setFakeBoldText(false);
     }
 
     private void drawBanner(Canvas c, int w, int h) {
+        float scale = uiScale(w, h);
         float a = Math.min(1f, bannerLife * 1.8f);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setFakeBoldText(true);
-        paint.setTextSize(34f);
+        paint.setTextSize(30f * scale);
         paint.setColor(Color.argb((int) (255f * a), 255, 235, 130));
         c.drawText(banner, w / 2f, h * 0.26f, paint);
         paint.setFakeBoldText(false);
     }
 
     private void drawMenuButton(Canvas c, RectF r, String text, int color) {
+        float scale = uiScale(getWidth(), getHeight());
         paint.setColor(color);
-        c.drawRoundRect(r, 18f, 18f, paint);
+        c.drawRoundRect(r, 18f * scale, 18f * scale, paint);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(19f);
-        c.drawText(text, r.centerX(), r.centerY() + 7f, paint);
+        paint.setTextSize(20f * scale);
+        c.drawText(text, r.centerX(), r.centerY() + 7f * scale, paint);
     }
 
     private int cardColor(int rarity) {
@@ -1212,7 +1687,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case 1: return "RARE";
             case 2: return "ÉPIQUE";
             case 3: return "LÉGENDAIRE";
-            default: return "COMMUN";
+            default: return "CLASSIQUE";
         }
     }
 
@@ -1330,7 +1805,30 @@ public class GameView extends View implements Choreographer.FrameCallback {
 
     private static final class Chest {
         final float x, y;
-        Chest(float x, float y) { this.x = x; this.y = y; }
+        final int kind;
+        final int objectiveId;
+        Chest(float x, float y, int kind, int objectiveId) {
+            this.x = x;
+            this.y = y;
+            this.kind = kind;
+            this.objectiveId = objectiveId;
+        }
+    }
+
+    private static final class WorldObjective {
+        final int id;
+        final int type;
+        final float x, y;
+        boolean revealed;
+        boolean activated;
+        boolean complete;
+        float progress;
+        WorldObjective(int id, int type, float x, float y) {
+            this.id = id;
+            this.type = type;
+            this.x = x;
+            this.y = y;
+        }
     }
 
     private static final class Particle {

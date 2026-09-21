@@ -337,20 +337,10 @@ public class GameViewV10 extends GameViewV8 {
         if (w <= 0 || h <= 0) return;
 
         if (inMenu10()) {
-            p10.setColor(Color.rgb(8, 14, 18));
-            canvas.drawRect(0f, h - 104f, w, h, p10);
-            p10.setTextAlign(Paint.Align.CENTER);
-            p10.setFakeBoldText(true);
-            p10.setTextSize(20f);
-            p10.setColor(Color.rgb(255, 216, 86));
-            canvas.drawText("MEGAMOBILE V1.0 • ASCENSION", w * 0.5f, h - 72f, p10);
-            p10.setTextSize(12f);
-            p10.setColor(Color.rgb(174, 202, 207));
-            canvas.drawText("mode infini • évolutions • némésis • contrats • cataclysmes", w * 0.5f, h - 50f, p10);
-            canvas.drawText("mise à jour automatique activée", w * 0.5f, h - 31f, p10);
-            p10.setFakeBoldText(false);
             return;
         }
+
+        if (bool(fDead) || bool(fChoosing) || bool(fPaused)) return;
 
         if (voidFx > 0f) {
             float a = Math.max(0f, voidFx / 0.42f);
@@ -360,7 +350,7 @@ public class GameViewV10 extends GameViewV8 {
             canvas.drawCircle(w * 0.5f, h * 0.56f, radius, s10);
         }
 
-        if (statusLife > 0f && !bool(fDead) && !bool(fChoosing)) {
+        if (statusLife > 0f) {
             float alpha = Math.min(1f, statusLife * 1.4f);
             p10.setColor(Color.argb((int) (150f * alpha), 7, 11, 14));
             RectF r = new RectF(20f, h * 0.80f, w - 20f, h * 0.80f + 48f);
