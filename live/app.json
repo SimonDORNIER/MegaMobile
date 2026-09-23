@@ -1,11 +1,11 @@
 {
-  "versionCode": 19,
-  "versionName": "1.5.0",
+  "versionCode": 20,
+  "versionName": "1.5.1",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.5.0.part00.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.5.0.part01.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.5.1.part00.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.5.1.part01.b64"
   ],
-  "sha256": "51bef13c25badef7093258d6aaf86a7cdd9b38bcab5ba3f640e0977e0be40f8f",
-  "note": "Artefacts spéciaux uniques, reliquaires maudits, caméra rapprochée puis dézoom progressif et optimisations des hordes."
+  "sha256": "710b767265a0ab65148cf1419dcc1d64e4a108d68f552bf30221f96d8a637760",
+  "note": "La sélection automatique ne met plus le jeu en pause : déplacement, ennemis, armes, événements et vitesse continuent."
 }
