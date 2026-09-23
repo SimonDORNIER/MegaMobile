@@ -264,7 +264,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         float dt = (frameTimeNanos - lastFrameNanos) / 1_000_000_000f;
         lastFrameNanos = frameTimeNanos;
         dt = Math.min(dt, 0.04f);
-        if (!paused && !dead && !choosing) update(dt);
+        if (!paused && !dead && !isChoiceBlockingGameplay()) update(dt);
         updateVisuals(dt);
         invalidate();
         Choreographer.getInstance().postFrameCallback(this);
@@ -1174,6 +1174,11 @@ public class GameView extends View implements Choreographer.FrameCallback {
         return cameraZoom;
     }
 
+    /** Un choix manuel met la partie en pause, contrairement à l'auto-sélection. */
+    protected final boolean isChoiceBlockingGameplay() {
+        return choosing && !autoChoice;
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -1191,10 +1196,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
         drawWorld(canvas);
         canvas.restore();
         drawHud(canvas, w, h);
-        if (choosing) drawChoices(canvas, w, h);
-        if (paused && !dead && !choosing) drawPause(canvas, w, h);
+        if (isChoiceBlockingGameplay()) drawChoices(canvas, w, h);
+        if (paused && !dead && !isChoiceBlockingGameplay()) drawPause(canvas, w, h);
         if (dead) drawDeath(canvas, w, h);
-        if (bannerLife > 0f && !dead && !choosing) drawBanner(canvas, w, h);
+        if (bannerLife > 0f && !dead && !isChoiceBlockingGameplay()) drawBanner(canvas, w, h);
     }
 
     private void drawBackground(Canvas c, int w, int h) {
@@ -2015,7 +2020,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 else if (quitRect.contains(x, y)) ((android.app.Activity) getContext()).finish();
                 return true;
             }
-            if (choosing) {
+            if (isChoiceBlockingGameplay()) {
                 for (int i = 0; i < currentChoices.size() && i < 3; i++) {
                     if (choiceRects[i].contains(x, y)) {
                         applyUpgrade(currentChoices.get(i));

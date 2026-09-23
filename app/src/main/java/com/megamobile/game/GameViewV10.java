@@ -140,7 +140,7 @@ public class GameViewV10 extends GameViewV8 {
         if (statusLife > 0f) statusLife -= dt;
         if (voidFx > 0f) voidFx -= dt;
 
-        if (menu || bool(fPaused) || bool(fDead) || bool(fChoosing)) return;
+        if (menu || bool(fPaused) || bool(fDead) || isChoiceBlockingGameplay()) return;
 
         int kills = integer(fKills);
         if (kills > lastKills10) {
@@ -344,7 +344,7 @@ public class GameViewV10 extends GameViewV8 {
             return;
         }
 
-        if (bool(fDead) || bool(fChoosing) || bool(fPaused)) return;
+        if (bool(fDead) || isChoiceBlockingGameplay() || bool(fPaused)) return;
 
         if (voidFx > 0f) {
             float a = Math.max(0f, voidFx / 0.42f);

@@ -133,14 +133,14 @@ public class GameViewFinal extends GameViewPro {
 
     private void runExtraSimulation(float realDt) {
         int multiplier = speedModes[speedModeIndex];
-        if (multiplier <= 1 || realDt <= 0f || bool(fPaused) || bool(fDead) || bool(fChoosing)) return;
+        if (multiplier <= 1 || realDt <= 0f || bool(fPaused) || bool(fDead) || isChoiceBlockingGameplay()) return;
         if (mUpdate == null || mUpdateVisuals == null) return;
         float extra = realDt * (multiplier - 1f);
         int steps = Math.min(12, Math.max(1, (int) Math.ceil(extra / 0.04f)));
         float step = extra / steps;
         try {
             for (int i = 0; i < steps; i++) {
-                if (bool(fDead) || bool(fPaused) || bool(fChoosing)) break;
+                if (bool(fDead) || bool(fPaused) || isChoiceBlockingGameplay()) break;
                 mUpdate.invoke(this, step);
                 mUpdateVisuals.invoke(this, step);
             }
@@ -161,7 +161,7 @@ public class GameViewFinal extends GameViewPro {
             return;
         }
         deathStored = false;
-        if (bool(fPaused) || bool(fChoosing)) return;
+        if (bool(fPaused) || isChoiceBlockingGameplay()) return;
 
         pickupTimer -= dt;
         if (pickupTimer <= 0f && pickups.size() < 3) {
@@ -258,8 +258,8 @@ public class GameViewFinal extends GameViewPro {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (!inMenu && !bool(fDead) && !bool(fChoosing) && !bool(fPaused)) drawPickups(canvas);
-        if (!inMenu && !bool(fDead) && !bool(fChoosing) && !bool(fPaused)) {
+        if (!inMenu && !bool(fDead) && !isChoiceBlockingGameplay() && !bool(fPaused)) drawPickups(canvas);
+        if (!inMenu && !bool(fDead) && !isChoiceBlockingGameplay() && !bool(fPaused)) {
             drawSpeedControl(canvas);
         }
         if (inMenu) drawMainMenu(canvas);

@@ -146,7 +146,7 @@ public class GameViewV7 extends GameViewV6 {
             return;
         }
         if (directorLabelLife > 0f) directorLabelLife -= dt;
-        if (bool(fDead) || bool(fPaused) || bool(fChoosing)) return;
+        if (bool(fDead) || bool(fPaused) || isChoiceBlockingGameplay()) return;
 
         float elapsed = number(fElapsed);
         int act = 1 + (int) (elapsed / 120f);
@@ -482,7 +482,7 @@ public class GameViewV7 extends GameViewV6 {
             drawMenuV7(canvas);
             return;
         }
-        if (bool(fDead) || bool(fChoosing) || bool(fPaused)) return;
+        if (bool(fDead) || isChoiceBlockingGameplay() || bool(fPaused)) return;
         drawWorldEvents(canvas);
         drawEliteOverlays(canvas);
         drawDirectorHud(canvas);

@@ -19,7 +19,7 @@ public class GameViewPro extends GameView {
     private long skinBadgeUntil = 0L;
 
     private Field fJoystickPointer, fJoyStartX, fJoyStartY, fJoyX, fJoyY, fJoyRadius, fMoveX, fMoveY;
-    private Field fPaused, fDead, fChoosing, fPauseRect, fAutoRect;
+    private Field fPaused, fDead, fChoosing, fAutoChoice, fPauseRect, fAutoRect;
     private Field fCamX, fCamY, fPx, fPy, fEnemies, fGems, fChests;
     private Field enemyType, enemyX, enemyY, enemyR;
     private Class<?> enemyClass;
@@ -57,6 +57,7 @@ public class GameViewPro extends GameView {
             fPaused = field("paused");
             fDead = field("dead");
             fChoosing = field("choosing");
+            fAutoChoice = field("autoChoice");
             fPauseRect = field("pauseRect");
             fAutoRect = field("autoRect");
             fCamX = field("camX");
@@ -77,9 +78,11 @@ public class GameViewPro extends GameView {
 
     private boolean modalOpen() {
         try {
+            boolean choosingManually = fChoosing != null && fChoosing.getBoolean(this)
+                    && (fAutoChoice == null || !fAutoChoice.getBoolean(this));
             return (fPaused != null && fPaused.getBoolean(this))
                     || (fDead != null && fDead.getBoolean(this))
-                    || (fChoosing != null && fChoosing.getBoolean(this));
+                    || choosingManually;
         } catch (Exception ignored) { return false; }
     }
 

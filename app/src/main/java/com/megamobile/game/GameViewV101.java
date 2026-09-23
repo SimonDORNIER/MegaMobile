@@ -97,7 +97,7 @@ public class GameViewV101 extends GameViewV10 {
 
     private void updatePatch(float dt) {
         if (versionLabelLife > 0f) versionLabelLife -= dt;
-        if (inMenu() || bool(fPaused) || bool(fDead) || bool(fChoosing)) {
+        if (inMenu() || bool(fPaused) || bool(fDead) || isChoiceBlockingGameplay()) {
             previousKills = integer(fKills);
             return;
         }
@@ -318,11 +318,11 @@ public class GameViewV101 extends GameViewV10 {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (versionLabelLife <= 0f || inMenu() || bool(fPaused) || bool(fDead) || bool(fChoosing)) return;
+        if (versionLabelLife <= 0f || inMenu() || bool(fPaused) || bool(fDead) || isChoiceBlockingGameplay()) return;
         float scale = Math.max(1f, Math.min(getWidth() / 420f, getHeight() / 820f));
         patchPaint.setTextAlign(Paint.Align.LEFT);
         patchPaint.setTextSize(11f * scale);
         patchPaint.setColor(Color.argb((int) (180f * Math.min(1f, versionLabelLife)), 178, 220, 225));
-        canvas.drawText("V1.5.0 • RELIQUES MAUDITES", 18f * scale, getHeight() - 18f * scale, patchPaint);
+        canvas.drawText("V1.5.1 • AUTO-SÉLECTION FLUIDE", 18f * scale, getHeight() - 18f * scale, patchPaint);
     }
 }

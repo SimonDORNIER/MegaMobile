@@ -153,7 +153,7 @@ public class GameViewV6 extends GameViewFinal {
         previousMenu = menu;
         previousDead = dead;
 
-        if (menu || dead || bool(fPaused) || bool(fChoosing)) return;
+        if (menu || dead || bool(fPaused) || isChoiceBlockingGameplay()) return;
 
         if (eventLabelLife > 0f) eventLabelLife -= dt;
         if (frenzyActive) {
@@ -330,7 +330,7 @@ public class GameViewV6 extends GameViewFinal {
             drawMenuStats(canvas);
             return;
         }
-        if (!bool(fDead) && !bool(fChoosing) && !bool(fPaused)) {
+        if (!bool(fDead) && !isChoiceBlockingGameplay() && !bool(fPaused)) {
             drawRelics(canvas);
             drawV6Status(canvas);
         }

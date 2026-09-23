@@ -3,6 +3,18 @@
 MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
 ## Version actuelle
+**V1.5.1 — AUTO-SÉLECTION FLUIDE**
+
+La V1.5.1 laisse toute la partie tourner pendant les choix automatiques.
+
+### Changements V1.5.1
+- ennemis, armes, événements, reliques et difficulté continuent pendant l'auto-sélection ;
+- joystick, direction et déplacement restent actifs sans relâchement simulé ;
+- la vitesse choisie, y compris ×100, reste appliquée pendant le choix automatique ;
+- l'écran de sélection bloquant n'est plus affiché en mode automatique ;
+- les choix manuels continuent de mettre la partie en pause.
+
+## Version précédente
 **V1.5.0 — RELIQUES MAUDITES**
 
 La V1.5.0 ajoute un butin d'exception et une caméra évolutive qui accompagne la montée en puissance de chaque partie.
