@@ -339,25 +339,26 @@ public class GameViewV6 extends GameViewFinal {
     private void drawRelics(Canvas canvas) {
         float camX = number(fCamX), camY = number(fCamY);
         float anchorX = getWidth() * 0.5f, anchorY = getHeight() * 0.56f;
+        float zoom = getCameraZoomScale();
         float t = number(fElapsed);
         for (Relic relic : relics) {
-            float sx = relic.x - camX + anchorX;
-            float sy = relic.y - camY + anchorY;
+            float sx = (relic.x - camX) * zoom + anchorX;
+            float sy = (relic.y - camY) * zoom + anchorY;
             float pulse = 1f + (float) Math.sin(t * 6f + relic.x * 0.01f) * 0.10f;
             int color = relic.type == RELIC_SHIELD ? Color.rgb(80, 170, 255)
                     : relic.type == RELIC_FRENZY ? Color.rgb(255, 95, 70)
                     : Color.rgb(215, 90, 255);
             paintV6.setColor(Color.argb(46, Color.red(color), Color.green(color), Color.blue(color)));
-            canvas.drawCircle(sx, sy, 46f * pulse, paintV6);
+            canvas.drawCircle(sx, sy, 46f * pulse * zoom, paintV6);
             strokeV6.setColor(color);
-            strokeV6.setStrokeWidth(4f);
-            canvas.drawCircle(sx, sy, 27f * pulse, strokeV6);
+            strokeV6.setStrokeWidth(4f * zoom);
+            canvas.drawCircle(sx, sy, 27f * pulse * zoom, strokeV6);
             paintV6.setColor(Color.WHITE);
             paintV6.setTextAlign(Paint.Align.CENTER);
             paintV6.setFakeBoldText(true);
-            paintV6.setTextSize(15f);
+            paintV6.setTextSize(15f * zoom);
             String icon = relic.type == RELIC_SHIELD ? "S" : relic.type == RELIC_FRENZY ? "F" : "XP";
-            canvas.drawText(icon, sx, sy + 5f, paintV6);
+            canvas.drawText(icon, sx, sy + 5f * zoom, paintV6);
             paintV6.setFakeBoldText(false);
         }
     }

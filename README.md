@@ -3,6 +3,19 @@
 MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
 ## Version actuelle
+**V1.5.0 — RELIQUES MAUDITES**
+
+La V1.5.0 ajoute un butin d'exception et une caméra évolutive qui accompagne la montée en puissance de chaque partie.
+
+### Changements V1.5.0
+- les élites peuvent lâcher un reliquaire maudit rare en plus des coffres d'artefacts classiques ;
+- quatre artefacts spéciaux uniques : Faucheuse d'âmes, Pacte de sang, Miroir noir et Cœur du vide ;
+- effets globaux combinables avec les armes : vol de vie, rage sous 50 % de PV, projectiles et critique partagés, portée et cadence ;
+- caméra rapprochée à 1,22× au début, puis dézoom progressif jusqu'à 0,82× pendant les huit premières minutes ;
+- coffres maudits, révélation dédiée et choix légendaires clairement identifiés ;
+- rendu optimisé en ignorant les sprites hors écran lors des hordes massives.
+
+## Version précédente
 **V1.4.0 — HÉROS ET OMBRES**
 
 La V1.4.0 remplace les formes génériques par des sprites médiévaux 2D semi-cartoon optimisés pour l'écran du Pixel 7a.
@@ -41,7 +54,7 @@ La V1.2.0 libère l'espace de jeu, généralise les synergies de build et améli
 - ouverture de coffre en plusieurs étapes avec anticipation, ouverture, verrouillage de rareté et révélation finale ;
 - animation de passage de niveau plus courte et plus discrète avant les choix.
 
-## Version précédente
+## Versions antérieures
 **V1.1.0 — MOBILE WORLD**
 
 La V1.1.0 adapte l'interface aux téléphones modernes et transforme le terrain infini en carte évolutive à explorer.

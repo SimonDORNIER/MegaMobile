@@ -175,6 +175,7 @@ public class GameViewPro extends GameView {
         float camX = fCamX.getFloat(this), camY = fCamY.getFloat(this);
         float playerX = fPx.getFloat(this), playerY = fPy.getFloat(this);
         float anchorX = getWidth() * 0.5f, anchorY = getHeight() * 0.56f;
+        float zoom = getCameraZoomScale();
         float time = (System.currentTimeMillis() % 120000L) / 1000f;
         canvas.save();
         canvas.clipRect(0f, 250f * scale, getWidth(), getHeight());
@@ -182,18 +183,22 @@ public class GameViewPro extends GameView {
         if (gems != null && skin.gem != null) for (Object obj : gems) {
             bindGem(obj);
             float wx = gemX.getFloat(obj), wy = gemY.getFloat(obj), value = gemValue.getFloat(obj);
+            float sx = (wx - camX) * zoom + anchorX;
+            float sy = (wy - camY) * zoom + anchorY;
+            if (sx < -50f || sx > getWidth() + 50f || sy < 200f || sy > getHeight() + 50f) continue;
             float pulse = 1f + (float) Math.sin(time * 5f + wx * 0.01f) * 0.10f;
-            float size = (value >= 20f ? 34f : value >= 3f ? 29f : 24f) * pulse;
-            drawBitmapCenteredTransformed(canvas, skin.gem, wx - camX + anchorX,
-                    wy - camY + anchorY, size, size, time * 28f);
+            float size = (value >= 20f ? 34f : value >= 3f ? 29f : 24f) * pulse * zoom;
+            drawBitmapCenteredTransformed(canvas, skin.gem, sx, sy, size, size, time * 28f);
         }
         List<Object> chests = (List<Object>) fChests.get(this);
         if (chests != null && skin.chest != null) for (Object obj : chests) {
             bindChest(obj);
             float wx = chestX.getFloat(obj), wy = chestY.getFloat(obj);
-            float lift = (float) Math.sin(time * 2.8f + wx * 0.008f) * 3f;
-            drawBitmapCenteredTransformed(canvas, skin.chest, wx - camX + anchorX,
-                    wy - camY + anchorY + lift, 76f, 76f, 0f);
+            float sx = (wx - camX) * zoom + anchorX;
+            float sy = (wy - camY) * zoom + anchorY;
+            if (sx < -90f || sx > getWidth() + 90f || sy < 170f || sy > getHeight() + 90f) continue;
+            float lift = (float) Math.sin(time * 2.8f + wx * 0.008f) * 3f * zoom;
+            drawBitmapCenteredTransformed(canvas, skin.chest, sx, sy + lift, 76f * zoom, 76f * zoom, 0f);
         }
         List<Object> enemies = (List<Object>) fEnemies.get(this);
         if (enemies != null) for (Object obj : enemies) {
@@ -206,17 +211,21 @@ public class GameViewPro extends GameView {
             if (type == 4) size = Math.max(size, 142f);
             if (type == 5) size = Math.max(size, 104f);
             float wx = enemyX.getFloat(obj), wy = enemyY.getFloat(obj);
-            float bob = (float) Math.sin(time * 4.2f + wx * 0.012f) * (type == 4 ? 4f : 2.2f);
+            float sx = (wx - camX) * zoom + anchorX;
+            float sy = (wy - camY) * zoom + anchorY;
+            size *= zoom;
+            if (sx < -size || sx > getWidth() + size || sy < 190f - size || sy > getHeight() + size) continue;
+            float bob = (float) Math.sin(time * 4.2f + wx * 0.012f) * (type == 4 ? 4f : 2.2f) * zoom;
             float angle = type == 1 ? (float) Math.sin(time * 7f + wy * 0.01f) * 5f : 0f;
-            drawBitmapCenteredTransformed(canvas, bmp, wx - camX + anchorX,
-                    wy - camY + anchorY + bob, size, size, angle);
+            drawBitmapCenteredTransformed(canvas, bmp, sx, sy + bob, size, size, angle);
         }
         if (skin.player != null) {
             float tilt = fJoyX == null ? 0f : fJoyX.getFloat(this) * 5f;
-            float bob = (float) Math.sin(time * 5.2f) * 2f;
+            float bob = (float) Math.sin(time * 5.2f) * 2f * zoom;
             drawBitmapCenteredTransformed(canvas, skin.player,
-                    playerX - camX + anchorX, playerY - camY + anchorY - 5f + bob,
-                    66f, 66f, tilt);
+                    (playerX - camX) * zoom + anchorX,
+                    (playerY - camY) * zoom + anchorY - 5f * zoom + bob,
+                    66f * zoom, 66f * zoom, tilt);
         }
         canvas.restore();
     }

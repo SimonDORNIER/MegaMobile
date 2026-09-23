@@ -31,10 +31,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
     protected static final int CHEST_STANDARD = 0;
     protected static final int CHEST_WEAPON = 1;
     protected static final int CHEST_ARTIFACT = 2;
+    protected static final int CHEST_SPECIAL_ARTIFACT = 3;
     private static final int CHOICE_LEVEL = 0;
     private static final int CHOICE_STANDARD = 1;
     private static final int CHOICE_WEAPON = 2;
     private static final int CHOICE_ARTIFACT = 3;
+    private static final int CHOICE_SPECIAL_ARTIFACT = 4;
 
     private static final int OBJECTIVE_CHEST = 0;
     private static final int OBJECTIVE_CAPTURE = 1;
@@ -110,6 +112,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private int artifactWardLevel;
     private int artifactCompassLevel;
     private int artifactHourglassLevel;
+    private int artifactSoulReaperLevel;
+    private int artifactBloodPactLevel;
+    private int artifactBlackMirrorLevel;
+    private int artifactVoidHeartLevel;
 
     private float moveX;
     private float moveY;
@@ -117,6 +123,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private float lastMoveY = -1f;
     private float camX;
     private float camY;
+    private float cameraZoom = 1.22f;
 
     private boolean worldReady;
     private int worldStage = 1;
@@ -223,10 +230,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
         auraCd = lightningCd = rocketCd = 0f;
         invuln = 0f;
         artifactCrownLevel = artifactWardLevel = artifactCompassLevel = artifactHourglassLevel = 0;
+        artifactSoulReaperLevel = artifactBloodPactLevel = artifactBlackMirrorLevel = artifactVoidHeartLevel = 0;
         moveX = moveY = 0f;
         lastMoveX = 0f;
         lastMoveY = -1f;
         camX = camY = 0f;
+        cameraZoom = 1.22f;
         worldReady = false;
         worldStage = 1;
         worldRadius = 0f;
@@ -291,6 +300,14 @@ public class GameView extends View implements Choreographer.FrameCallback {
         float cameraBlend = 1f - (float) Math.pow(0.001, dt);
         camX += (desiredCamX - camX) * cameraBlend;
         camY += (desiredCamY - camY) * cameraBlend;
+
+        // La partie démarre au plus près de l'action, puis révèle
+        // progressivement davantage de carte pendant les huit premières minutes.
+        float zoomProgress = Math.min(1f, elapsed / 480f);
+        zoomProgress = zoomProgress * zoomProgress * (3f - 2f * zoomProgress);
+        float targetZoom = 1.22f + (0.82f - 1.22f) * zoomProgress;
+        float zoomBlend = 1f - (float) Math.pow(0.025, dt);
+        cameraZoom += (targetZoom - cameraZoom) * zoomBlend;
 
         spawnCd -= dt;
         int dynamicCap = Math.min(remote.enemyCap, 48 + (int) (elapsed * 0.9f));
@@ -718,7 +735,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void spawnEnemy(int forcedType) {
-        float screenRadius = Math.max(getWidth(), getHeight()) * 0.72f + 110f;
+        float screenRadius = (Math.max(getWidth(), getHeight()) * 0.72f + 110f)
+                / Math.max(0.72f, cameraZoom);
         float angle = random.nextFloat() * (float) (Math.PI * 2.0);
         float x = px + (float) Math.cos(angle) * screenRadius;
         float y = py + (float) Math.sin(angle) * screenRadius;
@@ -773,6 +791,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         // drones et armes futures passent tous par cette méthode.
         boolean critHit = random.nextFloat() < crit;
         float actual = amount * (critHit ? 1.65f : 1f);
+        if (artifactBloodPactLevel > 0 && hp <= maxHp * 0.5f) actual *= 1.55f;
         e.hp -= actual;
         e.flash = 0.08f;
         texts.add(new FloatingText(e.x, e.y - e.r - 10f, Math.round(actual), critHit ? Color.YELLOW : Color.WHITE));
@@ -786,6 +805,9 @@ public class GameView extends View implements Choreographer.FrameCallback {
         score += value * 10 + Math.round(difficulty);
         gems.add(new Gem(e.x, e.y, value));
         burst(e.x, e.y, colorForEnemy(e.type), e.type == ENEMY_BOSS ? 34 : e.type == ENEMY_MINIBOSS ? 22 : 10);
+        if (artifactSoulReaperLevel > 0) {
+            hp = Math.min(maxHp, hp + Math.min(1.8f, maxHp * 0.008f));
+        }
         if (e.type == ENEMY_BOSS || e.type == ENEMY_MINIBOSS) {
             dropChest(e.x, e.y, CHEST_WEAPON);
             showBanner(e.type == ENEMY_BOSS ? "ARME DU SEIGNEUR HÉROÏQUE" : "ARME DU CHAMPION");
@@ -841,7 +863,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
         chestRevealTime = 0f;
         chestRevealKind = chestKind;
         choiceSource = chestKind == CHEST_WEAPON ? CHOICE_WEAPON
-                : chestKind == CHEST_ARTIFACT ? CHOICE_ARTIFACT : CHOICE_STANDARD;
+                : chestKind == CHEST_ARTIFACT ? CHOICE_ARTIFACT
+                : chestKind == CHEST_SPECIAL_ARTIFACT ? CHOICE_SPECIAL_ARTIFACT : CHOICE_STANDARD;
         chestRevealRarity = rollRarity(choiceSource);
         // Une sélection automatique ne doit pas simuler un relâchement du doigt :
         // le joueur reprend ainsi immédiatement sa trajectoire après le choix.
@@ -907,6 +930,19 @@ public class GameView extends View implements Choreographer.FrameCallback {
             codes.add("ART_WARD");
             codes.add("ART_COMPASS");
             codes.add("ART_HOURGLASS");
+        } else if (source == CHOICE_SPECIAL_ARTIFACT) {
+            if (artifactSoulReaperLevel == 0) codes.add("ART_SOUL_REAPER");
+            if (artifactBloodPactLevel == 0) codes.add("ART_BLOOD_PACT");
+            if (artifactBlackMirrorLevel == 0) codes.add("ART_BLACK_MIRROR");
+            if (artifactVoidHeartLevel == 0) codes.add("ART_VOID_HEART");
+            // Une fois les quatre reliques maudites trouvées, le coffre reste
+            // utile en renforçant un artefact classique.
+            if (codes.isEmpty()) {
+                codes.add("ART_CROWN");
+                codes.add("ART_WARD");
+                codes.add("ART_COMPASS");
+                codes.add("ART_HOURGLASS");
+            }
         } else {
             codes.add("HEAL");
             Collections.addAll(codes, base);
@@ -916,6 +952,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private int rollRarity(int source) {
+        if (source == CHOICE_SPECIAL_ARTIFACT) return 3;
         float r = random.nextFloat();
         if (source == CHOICE_ARTIFACT) {
             if (r < 0.18f) return 3;
@@ -960,6 +997,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "ART_WARD": return artifactWardLevel == 0 ? "ARTEFACT : ÉGIDE" : "ÉGIDE +" + artifactWardLevel;
             case "ART_COMPASS": return artifactCompassLevel == 0 ? "ARTEFACT : BOUSSOLE" : "BOUSSOLE +" + artifactCompassLevel;
             case "ART_HOURGLASS": return artifactHourglassLevel == 0 ? "ARTEFACT : SABLIER" : "SABLIER +" + artifactHourglassLevel;
+            case "ART_SOUL_REAPER": return "FAUCHEUSE D'ÂMES";
+            case "ART_BLOOD_PACT": return "PACTE DE SANG";
+            case "ART_BLACK_MIRROR": return "MIROIR NOIR";
+            case "ART_VOID_HEART": return "CŒUR DU VIDE";
             default: return code;
         }
     }
@@ -986,6 +1027,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "ART_WARD": return "PV, armure et régénération augmentés";
             case "ART_COMPASS": return "Toutes les portées, zones et attraction augmentées";
             case "ART_HOURGLASS": return "Toutes les armes attaquent plus vite";
+            case "ART_SOUL_REAPER": return "Dégâts globaux + vol de vie sur chaque élimination";
+            case "ART_BLOOD_PACT": return "Sous 50% PV : +55% dégâts pour toutes les armes";
+            case "ART_BLACK_MIRROR": return "+2 projectiles partagés et critique global";
+            case "ART_VOID_HEART": return "Portée, zones, attraction et cadence globales";
             default: return "Amélioration";
         }
     }
@@ -1052,6 +1097,35 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 artifactHourglassLevel++;
                 weaponHaste = Math.min(8f, weaponHaste * (1f + 0.10f * m));
                 break;
+            case "ART_SOUL_REAPER":
+                if (artifactSoulReaperLevel == 0) {
+                    artifactSoulReaperLevel = 1;
+                    damage *= 1.18f;
+                }
+                break;
+            case "ART_BLOOD_PACT":
+                if (artifactBloodPactLevel == 0) {
+                    artifactBloodPactLevel = 1;
+                    maxHp += 20f;
+                    hp = Math.min(maxHp, hp + 20f);
+                    armor += 5f;
+                }
+                break;
+            case "ART_BLACK_MIRROR":
+                if (artifactBlackMirrorLevel == 0) {
+                    artifactBlackMirrorLevel = 1;
+                    multi = Math.min(10, multi + 2);
+                    crit = Math.min(0.85f, crit + 0.075f);
+                }
+                break;
+            case "ART_VOID_HEART":
+                if (artifactVoidHeartLevel == 0) {
+                    artifactVoidHeartLevel = 1;
+                    range *= 1.25f;
+                    magnet += 90f;
+                    weaponHaste = Math.min(8f, weaponHaste * 1.15f);
+                }
+                break;
         }
         choosing = false;
         chestChoice = false;
@@ -1096,6 +1170,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
         return dx * dx + dy * dy;
     }
 
+    protected final float getCameraZoomScale() {
+        return cameraZoom;
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -1107,7 +1185,9 @@ public class GameView extends View implements Choreographer.FrameCallback {
         canvas.save();
         float anchorX = w * 0.5f;
         float anchorY = h * 0.56f;
-        canvas.translate(anchorX - camX, anchorY - camY);
+        canvas.translate(anchorX, anchorY);
+        canvas.scale(cameraZoom, cameraZoom);
+        canvas.translate(-camX, -camY);
         drawWorld(canvas);
         canvas.restore();
         drawHud(canvas, w, h);
@@ -1122,9 +1202,9 @@ public class GameView extends View implements Choreographer.FrameCallback {
         // Dalles de château : le fond reste lisible sur un petit écran mais donne
         // immédiatement une identité médiévale au terrain de jeu.
         paint.setColor(Color.rgb(28, 22, 36));
-        float tile = 74f;
-        float ox = ((-camX + w * 0.5f) % tile + tile) % tile;
-        float oy = ((-camY + h * 0.56f) % tile + tile) % tile;
+        float tile = 74f * cameraZoom;
+        float ox = ((-camX * cameraZoom + w * 0.5f) % tile + tile) % tile;
+        float oy = ((-camY * cameraZoom + h * 0.56f) % tile + tile) % tile;
         for (int row = -1; row < h / (int) tile + 2; row++) {
             float y = oy + row * tile;
             float offset = (row & 1) == 0 ? 0f : tile * 0.5f;
@@ -1337,11 +1417,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private void drawChest(Canvas c, Chest chest) {
         float pulse = 1f + (float) Math.sin(elapsed * 5f) * 0.06f;
         int glow = chest.kind == CHEST_WEAPON ? Color.rgb(255, 120, 75)
+                : chest.kind == CHEST_SPECIAL_ARTIFACT ? Color.rgb(255, 55, 145)
                 : chest.kind == CHEST_ARTIFACT ? Color.rgb(215, 105, 255)
                 : Color.rgb(255, 210, 70);
         paint.setColor(withAlpha(glow, 80));
         c.drawCircle(chest.x, chest.y, 42f * pulse, paint);
         paint.setColor(chest.kind == CHEST_WEAPON ? Color.rgb(145, 55, 36)
+                : chest.kind == CHEST_SPECIAL_ARTIFACT ? Color.rgb(62, 15, 55)
                 : chest.kind == CHEST_ARTIFACT ? Color.rgb(92, 48, 120)
                 : Color.rgb(132, 75, 30));
         c.drawRoundRect(chest.x - 24f, chest.y - 18f, chest.x + 24f, chest.y + 20f, 7f, 7f, paint);
@@ -1526,6 +1608,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         paint.setColor(Color.WHITE);
         paint.setTextSize(29f * scale);
         String heading = choiceSource == CHOICE_WEAPON ? "ARME DE BOSS"
+                : choiceSource == CHOICE_SPECIAL_ARTIFACT ? "ARTEFACT MAUDIT"
                 : choiceSource == CHOICE_ARTIFACT ? "COFFRE D'ARTEFACT"
                 : chestChoice ? "COFFRE" : "NIVEAU " + level;
         c.drawText(heading, w / 2f, 74f * scale, paint);
@@ -1571,6 +1654,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private int utilityColor(String code) {
+        if (code.equals("ART_SOUL_REAPER") || code.equals("ART_BLOOD_PACT")
+                || code.equals("ART_BLACK_MIRROR") || code.equals("ART_VOID_HEART")) {
+            return Color.rgb(255, 65, 145);
+        }
         if (code.startsWith("ART_")) return Color.rgb(205, 115, 255);
         switch (code) {
             case "HP": case "HEAL": case "REGEN": case "ART_WARD":
@@ -1653,6 +1740,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 c.drawLine(cx - r * 0.7f, cy - r * 0.65f, cx - r * 0.7f, cy + r * 0.65f, stroke);
                 break;
             case "ART_CROWN": case "ART_COMPASS": case "ART_HOURGLASS":
+            case "ART_SOUL_REAPER": case "ART_BLOOD_PACT":
+            case "ART_BLACK_MIRROR": case "ART_VOID_HEART":
                 c.drawLine(cx, cy - r, cx + r, cy, stroke);
                 c.drawLine(cx + r, cy, cx, cy + r, stroke);
                 c.drawLine(cx, cy + r, cx - r, cy, stroke);
@@ -1706,6 +1795,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         c.drawRoundRect(chestX - 45f * scale, cy - 104f * scale,
                 chestX + 45f * scale, cy + 4f * scale, 30f * scale, 30f * scale, paint);
         paint.setColor(chestRevealKind == CHEST_WEAPON ? Color.rgb(145, 55, 36)
+                : chestRevealKind == CHEST_SPECIAL_ARTIFACT ? Color.rgb(62, 15, 55)
                 : chestRevealKind == CHEST_ARTIFACT ? Color.rgb(92, 48, 120)
                 : Color.rgb(132, 75, 30));
         c.drawRoundRect(chestX - 63f * scale, cy - 12f * scale,
@@ -1743,6 +1833,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         paint.setTextSize(16f * scale);
         paint.setColor(Color.rgb(200, 215, 218));
         c.drawText(chestRevealKind == CHEST_WEAPON ? "Récompense de boss"
+                : chestRevealKind == CHEST_SPECIAL_ARTIFACT ? "Reliquaire maudit d'élite"
                 : chestRevealKind == CHEST_ARTIFACT ? "Artefact d'élite"
                 : "Butin récupéré", cx, 110f * scale, paint);
         paint.setTextSize((23f + lock * 7f) * scale);

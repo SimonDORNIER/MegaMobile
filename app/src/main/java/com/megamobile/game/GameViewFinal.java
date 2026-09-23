@@ -268,21 +268,22 @@ public class GameViewFinal extends GameViewPro {
     private void drawPickups(Canvas canvas) {
         float camX = number(fCamX), camY = number(fCamY);
         float anchorX = getWidth() * 0.5f, anchorY = getHeight() * 0.56f;
+        float zoom = getCameraZoomScale();
         float t = number(fElapsed);
         for (SpecialPickup p : pickups) {
-            float sx = p.x - camX + anchorX;
-            float sy = p.y - camY + anchorY;
+            float sx = (p.x - camX) * zoom + anchorX;
+            float sy = (p.y - camY) * zoom + anchorY;
             float pulse = 1f + (float) Math.sin(t * 5.5f + p.x * 0.01f) * 0.08f;
             int color = p.type == PICKUP_MAGNET ? Color.rgb(80, 210, 255)
                     : p.type == PICKUP_NUKE ? Color.rgb(255, 105, 65)
                     : p.type == PICKUP_ULTRA ? Color.rgb(245, 90, 255)
                     : Color.rgb(95, 235, 130);
             ui.setColor(Color.argb(50, Color.red(color), Color.green(color), Color.blue(color)));
-            canvas.drawCircle(sx, sy, 42f * pulse, ui);
-            stroke.setColor(color); stroke.setStrokeWidth(4f);
-            canvas.drawCircle(sx, sy, 25f * pulse, stroke);
-            ui.setColor(color); ui.setTextAlign(Paint.Align.CENTER); ui.setFakeBoldText(true); ui.setTextSize(17f);
-            canvas.drawText(p.type == PICKUP_MAGNET ? "M" : p.type == PICKUP_NUKE ? "N" : p.type == PICKUP_ULTRA ? "U" : "+", sx, sy + 6f, ui);
+            canvas.drawCircle(sx, sy, 42f * pulse * zoom, ui);
+            stroke.setColor(color); stroke.setStrokeWidth(4f * zoom);
+            canvas.drawCircle(sx, sy, 25f * pulse * zoom, stroke);
+            ui.setColor(color); ui.setTextAlign(Paint.Align.CENTER); ui.setFakeBoldText(true); ui.setTextSize(17f * zoom);
+            canvas.drawText(p.type == PICKUP_MAGNET ? "M" : p.type == PICKUP_NUKE ? "N" : p.type == PICKUP_ULTRA ? "U" : "+", sx, sy + 6f * zoom, ui);
             ui.setFakeBoldText(false);
         }
     }
