@@ -19,8 +19,8 @@ android {
         applicationId 'com.megamobile.game'
         minSdk 26
         targetSdk 29
-        versionCode 19
-        versionName '1.5.0'
+        versionCode 20
+        versionName '1.5.1'
     }
 
     signingConfigs {

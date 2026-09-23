@@ -189,7 +189,7 @@ public class GameViewV8 extends GameViewV7Final {
         lastElapsed = elapsed;
 
         updateFx(dt);
-        if (menu || bool(fPaused) || bool(fDead) || bool(fChoosing)) return;
+        if (menu || bool(fPaused) || bool(fDead) || isChoiceBlockingGameplay()) return;
 
         int kills = integer(fKills);
         int killDelta = Math.max(0, kills - lastKills);
@@ -623,7 +623,7 @@ public class GameViewV8 extends GameViewV7Final {
             return;
         }
 
-        if (bool(fDead) || bool(fChoosing) || bool(fPaused)) return;
+        if (bool(fDead) || isChoiceBlockingGameplay() || bool(fPaused)) return;
 
         drawWorldFx(canvas, w, h);
         drawV8Hud(canvas, w, h);
