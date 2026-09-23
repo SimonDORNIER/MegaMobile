@@ -633,7 +633,9 @@ public class GameViewV8 extends GameViewV7Final {
         float camX = readBase("camX"), camY = readBase("camY");
         float anchorX = w * 0.5f, anchorY = h * 0.56f;
         c.save();
-        c.translate(anchorX - camX, anchorY - camY);
+        c.translate(anchorX, anchorY);
+        c.scale(getCameraZoomScale(), getCameraZoomScale());
+        c.translate(-camX, -camY);
 
         for (PulseFx fx : pulses) {
             float alpha = Math.max(0f, fx.life / fx.maxLife);

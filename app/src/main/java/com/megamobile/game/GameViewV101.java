@@ -323,6 +323,6 @@ public class GameViewV101 extends GameViewV10 {
         patchPaint.setTextAlign(Paint.Align.LEFT);
         patchPaint.setTextSize(11f * scale);
         patchPaint.setColor(Color.argb((int) (180f * Math.min(1f, versionLabelLife)), 178, 220, 225));
-        canvas.drawText("V1.4.0 • HÉROS ET OMBRES", 18f * scale, getHeight() - 18f * scale, patchPaint);
+        canvas.drawText("V1.5.0 • RELIQUES MAUDITES", 18f * scale, getHeight() - 18f * scale, patchPaint);
     }
 }

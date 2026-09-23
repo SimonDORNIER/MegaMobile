@@ -309,7 +309,11 @@ public class GameViewV7 extends GameViewV6 {
             if (!list.contains(enemy)) {
                 try {
                     bindEnemy(enemy);
-                    if (rng.nextFloat() < 0.55f) {
+                    float lootRoll = rng.nextFloat();
+                    if (lootRoll < 0.12f) {
+                        dropChest(eX.getFloat(enemy), eY.getFloat(enemy), CHEST_SPECIAL_ARTIFACT);
+                        label("RELIQUAIRE MAUDIT LÂCHÉ");
+                    } else if (lootRoll < 0.62f) {
                         dropChest(eX.getFloat(enemy), eY.getFloat(enemy), CHEST_ARTIFACT);
                         label("COFFRE D'ARTEFACT LÂCHÉ");
                     }
@@ -489,11 +493,15 @@ public class GameViewV7 extends GameViewV6 {
     }
 
     private float sx(float worldX) {
-        return worldX - number(fCamX) + getWidth() * 0.5f;
+        return (worldX - number(fCamX)) * getCameraZoomScale() + getWidth() * 0.5f;
     }
 
     private float sy(float worldY) {
-        return worldY - number(fCamY) + getHeight() * 0.56f;
+        return (worldY - number(fCamY)) * getCameraZoomScale() + getHeight() * 0.56f;
+    }
+
+    private float zs(float worldSize) {
+        return worldSize * getCameraZoomScale();
     }
 
     private void drawWorldEvents(Canvas canvas) {
@@ -502,17 +510,17 @@ public class GameViewV7 extends GameViewV6 {
             if (!m.exploded) {
                 float pulse = 1f + (float) Math.sin(number(fElapsed) * 12f + m.x * 0.01f) * 0.08f;
                 s.setColor(Color.argb(210, 255, 125, 60));
-                s.setStrokeWidth(4f);
-                canvas.drawCircle(x, y, (46f + m.delay * 20f) * pulse, s);
+                s.setStrokeWidth(zs(4f));
+                canvas.drawCircle(x, y, zs((46f + m.delay * 20f) * pulse), s);
                 p.setColor(Color.argb(55, 255, 80, 40));
-                canvas.drawCircle(x, y, 42f, p);
+                canvas.drawCircle(x, y, zs(42f), p);
             } else {
                 float alpha = Math.max(0f, m.life / 0.48f);
                 p.setColor(Color.argb((int) (110f * alpha), 255, 145, 60));
-                canvas.drawCircle(x, y, 135f * (1.05f - alpha * 0.35f), p);
+                canvas.drawCircle(x, y, zs(135f * (1.05f - alpha * 0.35f)), p);
                 s.setColor(Color.argb((int) (240f * alpha), 255, 225, 130));
-                s.setStrokeWidth(7f);
-                canvas.drawCircle(x, y, 120f * (1.05f - alpha * 0.25f), s);
+                s.setStrokeWidth(zs(7f));
+                canvas.drawCircle(x, y, zs(120f * (1.05f - alpha * 0.25f)), s);
             }
         }
 
@@ -520,20 +528,21 @@ public class GameViewV7 extends GameViewV6 {
             float x = sx(beacon.x), y = sy(beacon.y);
             float ratio = Math.min(1f, beacon.progress / 4.2f);
             p.setColor(Color.argb(42, 75, 220, 255));
-            canvas.drawCircle(x, y, beacon.radius, p);
-            s.setStrokeWidth(4f);
+            float beaconRadius = zs(beacon.radius);
+            canvas.drawCircle(x, y, beaconRadius, p);
+            s.setStrokeWidth(zs(4f));
             s.setColor(Color.rgb(90, 225, 255));
-            canvas.drawCircle(x, y, beacon.radius, s);
-            s.setStrokeWidth(8f);
+            canvas.drawCircle(x, y, beaconRadius, s);
+            s.setStrokeWidth(zs(8f));
             s.setColor(Color.rgb(125, 255, 185));
-            RectF ring = new RectF(x - beacon.radius - 8f, y - beacon.radius - 8f,
-                    x + beacon.radius + 8f, y + beacon.radius + 8f);
+            RectF ring = new RectF(x - beaconRadius - zs(8f), y - beaconRadius - zs(8f),
+                    x + beaconRadius + zs(8f), y + beaconRadius + zs(8f));
             canvas.drawArc(ring, -90f, ratio * 360f, false, s);
             p.setTextAlign(Paint.Align.CENTER);
             p.setFakeBoldText(true);
-            p.setTextSize(14f);
+            p.setTextSize(zs(14f));
             p.setColor(Color.WHITE);
-            canvas.drawText(ratio > 0f ? "CAPTURE " + Math.round(ratio * 100f) + "%" : "BALISE", x, y + 5f, p);
+            canvas.drawText(ratio > 0f ? "CAPTURE " + Math.round(ratio * 100f) + "%" : "BALISE", x, y + zs(5f), p);
             p.setFakeBoldText(false);
             drawEdgeMarker(canvas, beacon.x, beacon.y, Color.rgb(90, 225, 255), "B");
         }
@@ -548,19 +557,19 @@ public class GameViewV7 extends GameViewV6 {
             try {
                 bindEnemy(enemy);
                 float x = sx(eX.getFloat(enemy)), y = sy(eY.getFloat(enemy));
-                float r = eR.getFloat(enemy) + 10f;
+                float r = zs(eR.getFloat(enemy) + 10f);
                 int color = entry.getValue().kind == ELITE_BERSERKER ? Color.rgb(255, 90, 80)
                         : entry.getValue().kind == ELITE_COLOSSUS ? Color.rgb(255, 205, 70)
                         : Color.rgb(160, 105, 255);
-                s.setStrokeWidth(4f);
+                s.setStrokeWidth(zs(4f));
                 s.setColor(color);
                 canvas.drawCircle(x, y, r, s);
                 p.setTextAlign(Paint.Align.CENTER);
                 p.setFakeBoldText(true);
-                p.setTextSize(10f);
+                p.setTextSize(zs(10f));
                 p.setColor(color);
                 canvas.drawText(entry.getValue().kind == ELITE_BERSERKER ? "RAGE"
-                        : entry.getValue().kind == ELITE_COLOSSUS ? "TITAN" : "PHASE", x, y - r - 6f, p);
+                        : entry.getValue().kind == ELITE_COLOSSUS ? "TITAN" : "PHASE", x, y - r - zs(6f), p);
                 p.setFakeBoldText(false);
             } catch (Exception ignored) { }
         }
