@@ -162,7 +162,7 @@ public class GameViewV6 extends GameViewFinal {
         }
 
         eventTimer -= dt;
-        if (eventTimer <= 0f) {
+        if (eventTimer <= 0f && !isBreathingPeriod()) {
             triggerEvent();
             eventTimer = 66f + randomV6.nextFloat() * 30f;
         }
@@ -231,27 +231,17 @@ public class GameViewV6 extends GameViewFinal {
     }
 
     private void startFrenzy(float seconds) {
-        try {
-            if (!frenzyActive) {
-                if (fDamage != null) fDamage.setFloat(this, number(fDamage) * 1.32f);
-                if (fWeaponHaste != null) fWeaponHaste.setFloat(this, Math.min(8f, number(fWeaponHaste) * 1.28f));
-                if (fSpeed != null) fSpeed.setFloat(this, number(fSpeed) * 1.10f);
-                frenzyActive = true;
-            }
-            frenzyTimer = Math.max(frenzyTimer, seconds);
-        } catch (Exception ignored) { }
+        setCombatFrenzy(true);
+        frenzyActive = true;
+        frenzyTimer = Math.max(frenzyTimer, seconds);
     }
 
     private void stopFrenzy() {
-        try {
-            if (!frenzyActive) return;
-            if (fDamage != null) fDamage.setFloat(this, number(fDamage) / 1.32f);
-            if (fWeaponHaste != null) fWeaponHaste.setFloat(this, Math.max(1f, number(fWeaponHaste) / 1.28f));
-            if (fSpeed != null) fSpeed.setFloat(this, number(fSpeed) / 1.10f);
-            frenzyActive = false;
-            frenzyTimer = 0f;
-            label("SURCHARGE TERMINÉE");
-        } catch (Exception ignored) { }
+        if (!frenzyActive) return;
+        setCombatFrenzy(false);
+        frenzyActive = false;
+        frenzyTimer = 0f;
+        label("SURCHARGE TERMINÉE");
     }
 
     private void spawnRelic() {

@@ -24,7 +24,7 @@ import java.util.List;
 public class GameViewV101 extends GameViewV10 {
     private final Paint patchPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private Field fElapsed, fLevel, fKills, fDifficulty, fEnemies, fGems;
+    private Field fElapsed, fLevel, fKills, fEnemies, fGems;
     private Field fParticles, fTexts, fArcs, fShots;
     private Field fPaused, fDead, fChoosing, fPx, fPy, fNextXp, fInMenu;
     private Method mSpawnEnemy, mGainXp, mShowBanner;
@@ -36,6 +36,7 @@ public class GameViewV101 extends GameViewV10 {
 
     private long lastMs;
     private int previousKills;
+    private int lastRunGeneration = -1;
     private float noKillTimer;
     private float hordeTimer;
     private float recoveryTimer;
@@ -54,7 +55,6 @@ public class GameViewV101 extends GameViewV10 {
             fElapsed = baseField("elapsed");
             fLevel = baseField("level");
             fKills = baseField("kills");
-            fDifficulty = baseField("difficulty");
             fEnemies = baseField("enemies");
             fGems = baseField("gems");
             fParticles = baseField("particles");
@@ -96,6 +96,14 @@ public class GameViewV101 extends GameViewV10 {
     }
 
     private void updatePatch(float dt) {
+        if (lastRunGeneration != getRunGeneration()) {
+            lastRunGeneration = getRunGeneration();
+            previousKills = integer(fKills);
+            noKillTimer = 0f;
+            hordeTimer = 0.8f;
+            recoveryTimer = 1.15f;
+            cleanupTimer = 0.85f;
+        }
         if (versionLabelLife > 0f) versionLabelLife -= dt;
         if (inMenu() || bool(fPaused) || bool(fDead) || isChoiceBlockingGameplay()) {
             previousKills = integer(fKills);
@@ -111,7 +119,6 @@ public class GameViewV101 extends GameViewV10 {
         }
 
         tuneLateGameXp();
-        reinforceDifficultyFloor();
 
         hordeTimer -= dt;
         if (hordeTimer <= 0f) {
@@ -146,30 +153,19 @@ public class GameViewV101 extends GameViewV10 {
         int level = integer(fLevel);
         if (level < 35 || fNextXp == null) return;
         float current = number(fNextXp);
-        float cap = 260f + level * 4.2f + (float) Math.sqrt(level) * 38f;
+        float cap = GameBalance.xpForLevel(level);
         if (current > cap) setFloat(fNextXp, cap);
     }
 
-    /** Adds a small level component so a very strong build never permanently outruns the horde. */
-    private void reinforceDifficultyFloor() {
-        int level = integer(fLevel);
-        float elapsed = number(fElapsed);
-        float floor = 1f + elapsed / 70f + level * 0.035f;
-        if (number(fDifficulty) < floor) setFloat(fDifficulty, floor);
-    }
-
     private void maintainHorde() {
+        if (isBreathingPeriod()) return;
         List<Object> enemies = list(fEnemies);
         int count = enemies == null ? 0 : enemies.size();
-        int level = integer(fLevel);
-        float elapsed = number(fElapsed);
-
-        int target = Math.min(112, 12 + level / 2 + (int) (elapsed / 28f));
-        if (noKillTimer > 5f) target = Math.min(124, target + 14);
+        int target = combatHordeTarget();
         if (count >= target) return;
 
         int missing = target - count;
-        int batch = Math.min(noKillTimer > 5f ? 9 : 5, missing);
+        int batch = Math.min(3, missing);
         spawn(false, batch);
     }
 

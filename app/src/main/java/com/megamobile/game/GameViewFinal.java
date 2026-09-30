@@ -215,17 +215,12 @@ public class GameViewFinal extends GameViewPro {
                 }
                 banner("AIMANT ! " + count + " gemmes");
             } else if (type == PICKUP_NUKE) {
-                List<Object> enemies = fEnemies == null ? null : (List<Object>) fEnemies.get(this);
-                int count = enemies == null ? 0 : enemies.size();
-                if (enemies != null) enemies.clear();
-                if (fKills != null) fKills.setInt(this, integer(fKills) + count);
-                if (fScore != null) fScore.setInt(this, integer(fScore) + count * 12);
-                if (mGainXp != null && count > 0) mGainXp.invoke(this, Math.min(55f, count * 0.55f));
-                banner("NUKE ! " + count + " ennemis");
+                int count = detonatePickup();
+                banner("FLÉAU DES OMBRES — " + count + " CIBLES");
             } else if (type == PICKUP_ULTRA) {
-                if (fDamage != null) fDamage.setFloat(this, number(fDamage) * 1.22f);
+                if (fDamage != null) fDamage.setFloat(this, GameBalance.powerGain(number(fDamage), 0.22f));
                 if (fWeaponHaste != null) fWeaponHaste.setFloat(this, Math.min(8f, number(fWeaponHaste) * 1.14f));
-                if (fSpeed != null) fSpeed.setFloat(this, number(fSpeed) * 1.08f);
+                if (fSpeed != null) fSpeed.setFloat(this, Math.min(GameBalance.MAX_SPEED, number(fSpeed) * 1.08f));
                 if (fCrit != null) fCrit.setFloat(this, Math.min(0.85f, number(fCrit) + 0.08f));
                 float oldMax = number(fMaxHp);
                 if (fMaxHp != null) fMaxHp.setFloat(this, oldMax + 18f);

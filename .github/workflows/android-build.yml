@@ -8,6 +8,8 @@ on:
     branches: [ main ]
     paths:
       - 'app/**'
+      - 'tools/**'
+      - 'live/config.json'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
@@ -16,6 +18,8 @@ on:
     branches: [ main ]
     paths:
       - 'app/**'
+      - 'tools/**'
+      - 'live/config.json'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
