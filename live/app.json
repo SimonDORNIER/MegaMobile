@@ -1,11 +1,11 @@
 {
-  "versionCode": 20,
-  "versionName": "1.5.1",
+  "versionCode": 21,
+  "versionName": "1.6.0",
   "apkUrl": "",
   "apkParts": [
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.5.1.part00.b64",
-    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.5.1.part01.b64"
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.6.0.part00.b64",
+    "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/live/apk/v1.6.0.part01.b64"
   ],
-  "sha256": "710b767265a0ab65148cf1419dcc1d64e4a108d68f552bf30221f96d8a637760",
-  "note": "La sélection automatique ne met plus le jeu en pause : déplacement, ennemis, armes, événements et vitesse continuent."
+  "sha256": "9982aaf7381254498f9681d781868cbe9768b61f47b1fd5b452ddb13cfecdc1c",
+  "note": "Vagues avec accalmies, boss esquivables, butin amélioré, choix utiles et sélection auto sans pause."
 }
