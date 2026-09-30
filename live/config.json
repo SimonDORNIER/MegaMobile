@@ -1,9 +1,9 @@
 {
-  "contentVersion": "1.0.1-live.1",
+  "contentVersion": "1.6.0-live.1",
   "playerBaseSpeed": 305.0,
-  "spawnInterval": 0.44,
-  "difficultySeconds": 58.0,
-  "enemyCap": 240,
-  "bossInterval": 42.0,
+  "spawnInterval": 0.64,
+  "difficultySeconds": 80.0,
+  "enemyCap": 160,
+  "bossInterval": 52.0,
   "xpMagnet": 235.0
 }

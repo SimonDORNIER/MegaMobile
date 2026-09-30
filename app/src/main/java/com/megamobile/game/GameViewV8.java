@@ -24,7 +24,7 @@ public class GameViewV8 extends GameViewV7Final {
     private final Random rng = new Random();
 
     private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fSpeed;
-    private Field fRegen, fCrit, fMulti, fRange, fWeaponHaste, fAura, fOrbit, fLightning, fRocket, fEnemies;
+    private Field fRegen, fCrit, fMulti, fRange, fWeaponHaste, fAura, fOrbit, fLightning, fRocket, fDrone, fEnemies;
     private Field fPx, fPy, fPaused, fDead, fChoosing, fInvuln, fInMenu;
     private Method mSpawnEnemy, mGainXp, mDamageEnemy, mShowBanner;
 
@@ -33,7 +33,7 @@ public class GameViewV8 extends GameViewV7Final {
 
     private long lastMs;
     private boolean previousMenu = true;
-    private float lastElapsed;
+    private int lastRunGeneration = -1;
     private int lastKills;
     private int lastBossCount;
 
@@ -74,7 +74,7 @@ public class GameViewV8 extends GameViewV7Final {
         bind();
         lastMs = SystemClock.uptimeMillis();
         lastKills = integer(fKills);
-        lastBossCount = countBosses();
+        lastBossCount = getBossKills();
     }
 
     private void bind() {
@@ -96,6 +96,7 @@ public class GameViewV8 extends GameViewV7Final {
             fOrbit = baseField("orbitLevel");
             fLightning = baseField("lightningLevel");
             fRocket = baseField("rocketLevel");
+            fDrone = baseField("droneLevel");
             fEnemies = baseField("enemies");
             fPx = baseField("px");
             fPy = baseField("py");
@@ -144,7 +145,7 @@ public class GameViewV8 extends GameViewV7Final {
     }
 
     private float haste() {
-        return Math.max(1f, number(fWeaponHaste));
+        return Math.max(1f, globalWeaponHaste());
     }
 
     private float areaScale() {
@@ -183,10 +184,9 @@ public class GameViewV8 extends GameViewV7Final {
 
     private void updateV8(float dt) {
         boolean menu = inMenu();
-        float elapsed = number(fElapsed);
-        if ((previousMenu && !menu) || (lastElapsed > 5f && elapsed + 1f < lastElapsed)) resetRunV8();
+        if ((previousMenu && !menu) || lastRunGeneration != getRunGeneration()) resetRunV8();
         previousMenu = menu;
-        lastElapsed = elapsed;
+        lastRunGeneration = getRunGeneration();
 
         updateFx(dt);
         if (menu || bool(fPaused) || bool(fDead) || isChoiceBlockingGameplay()) return;
@@ -194,12 +194,11 @@ public class GameViewV8 extends GameViewV7Final {
         int kills = integer(fKills);
         int killDelta = Math.max(0, kills - lastKills);
         lastKills = kills;
-        if (killDelta > 0) fury = Math.min(100f, fury + killDelta * (3.0f + integer(fLevel) * 0.025f));
+        if (killDelta > 0 && overdrive <= 0f) fury = Math.min(100f, fury + killDelta * (1.4f + Math.min(0.6f, integer(fLevel) * 0.015f)));
 
         if (overdrive > 0f) {
             overdrive -= dt;
             overdrivePulse -= dt;
-            setFloat(fInvuln, Math.max(number(fInvuln), 0.07f));
             if (overdrivePulse <= 0f) {
                 overdrivePulse = Math.max(0.12f, 0.36f / haste());
                 overdriveStrike();
@@ -232,18 +231,19 @@ public class GameViewV8 extends GameViewV7Final {
         bossSouls = ascensionRank = 0;
         surgeTimer = 22f;
         lastKills = integer(fKills);
-        lastBossCount = countBosses();
+        lastBossCount = getBossKills();
         beams.clear();
         pulses.clear();
     }
 
     private void startOverdrive() {
         fury = 0f;
-        overdrive = 10f;
+        overdrive = 6f;
         overdrivePulse = 0f;
         float max = number(fMaxHp);
         setFloat(fHp, Math.min(max, number(fHp) + max * 0.12f));
-        banner("SURCHARGE ASCENSION — 10s");
+        setFloat(fInvuln, Math.max(number(fInvuln), 1.2f));
+        banner("FURIE DES OMBRES — 6s");
         pulseFx(number(fPx), number(fPy), 70f, Color.rgb(255, 206, 76));
     }
 
@@ -262,11 +262,10 @@ public class GameViewV8 extends GameViewV7Final {
     }
 
     private void updateDrones(float dt) {
-        int level = integer(fLevel);
-        int wanted = level >= 34 ? 4 : level >= 24 ? 3 : level >= 14 ? 2 : level >= 7 ? 1 : 0;
+        int wanted = integer(fDrone);
         if (wanted > droneTier) {
             droneTier = wanted;
-            banner(droneTier == 1 ? "NOUVELLE ARME : DRONE" : "DRONES ×" + droneTier);
+            banner(droneTier == 1 ? "FAMILIER SPECTRAL ÉVEILLÉ" : "FAMILIERS ×" + droneTier);
         }
         if (droneTier <= 0) return;
         droneCd -= dt;
@@ -276,6 +275,8 @@ public class GameViewV8 extends GameViewV7Final {
         List<Object> list = snapshotEnemies();
         if (list.isEmpty()) return;
         final float px = number(fPx), py = number(fPy);
+        float maxRange = 520f * areaScale();
+        list.removeIf(e -> distanceSq(px, py, enemyX(e), enemyY(e)) > maxRange * maxRange);
         list.sort(Comparator.comparingDouble(e -> distanceSq(px, py, enemyX(e), enemyY(e))));
         float dmg = number(fDamage) * (0.62f + droneTier * 0.11f);
         int count = Math.min(droneTier, list.size());
@@ -309,11 +310,11 @@ public class GameViewV8 extends GameViewV7Final {
             banner("ÉVOLUTION : ESSAIM DE SIÈGE");
         }
 
-        if (integer(fLevel) >= 12) {
+        if (aura >= 2) {
             novaCd -= dt;
             if (novaCd <= 0f) {
                 novaCd = Math.max(1.0f, Math.max(2.7f, 6.0f - integer(fLevel) * 0.055f) / haste());
-                novaBlast((145f + integer(fLevel) * 2.2f) * areaScale(), number(fDamage) * 0.72f, Color.rgb(116, 227, 170));
+                novaBlast((145f + aura * 12f) * areaScale(), number(fDamage) * 0.72f, Color.rgb(116, 227, 170));
             }
         }
 
@@ -437,20 +438,15 @@ public class GameViewV8 extends GameViewV7Final {
     }
 
     private void contractFailure() {
-        banner("CONTRAT ÉCHOUÉ — CHASSEUR ENVOYÉ");
-        try {
-            if (mSpawnEnemy != null) {
-                mSpawnEnemy.invoke(this, true);
-                for (int i = 0; i < 6; i++) mSpawnEnemy.invoke(this, false);
-            }
-        } catch (Exception ignored) { }
+        banner("CONTRAT TERMINÉ — UNE AUTRE CHANCE ARRIVE");
     }
 
     private void updateNemesis(float dt) {
         List<Object> list = enemies();
         if (nemesis != null && (list == null || !list.contains(nemesis))) {
+            float x = enemyX(nemesis), y = enemyY(nemesis);
             nemesis = null;
-            nemesisReward();
+            nemesisReward(x, y);
             nemesisTimer = 58f + rng.nextFloat() * 26f;
         }
         if (nemesis != null) return;
@@ -468,13 +464,13 @@ public class GameViewV8 extends GameViewV7Final {
             Object e = list.get(rng.nextInt(list.size()));
             try {
                 bindEnemy(e);
-                if (eType.getInt(e) == 4) continue;
+                if (!claimElite(e)) continue;
                 float hp = eHp.getFloat(e);
                 float max = eMaxHp.getFloat(e);
-                eHp.setFloat(e, hp * 7.5f);
-                eMaxHp.setFloat(e, max * 7.5f);
-                eSpeed.setFloat(e, eSpeed.getFloat(e) * 1.16f);
-                eDamage.setFloat(e, eDamage.getFloat(e) * 2.0f);
+                eHp.setFloat(e, hp * 5f);
+                eMaxHp.setFloat(e, max * 5f);
+                eSpeed.setFloat(e, eSpeed.getFloat(e) * 1.08f);
+                eDamage.setFloat(e, eDamage.getFloat(e) * 1.5f);
                 eR.setFloat(e, eR.getFloat(e) * 1.42f);
                 nemesis = e;
                 banner("NÉMÉSIS — PRIME MAJEURE");
@@ -484,7 +480,8 @@ public class GameViewV8 extends GameViewV7Final {
         nemesisTimer = 12f;
     }
 
-    private void nemesisReward() {
+    private void nemesisReward(float x, float y) {
+        dropChest(x, y, rng.nextFloat() < 0.18f ? CHEST_SPECIAL_ARTIFACT : CHEST_ARTIFACT);
         setInt(fScore, integer(fScore) + 1200 + integer(fLevel) * 35);
         try { if (mGainXp != null) mGainXp.invoke(this, 20f + integer(fLevel)); }
         catch (Exception ignored) { }
@@ -495,9 +492,9 @@ public class GameViewV8 extends GameViewV7Final {
     }
 
     private void updateBossSouls() {
-        int bosses = countBosses();
-        if (lastBossCount > bosses) {
-            int deadBosses = lastBossCount - bosses;
+        int bosses = getBossKills();
+        if (bosses > lastBossCount) {
+            int deadBosses = bosses - lastBossCount;
             bossSouls += deadBosses;
             fury = Math.min(100f, fury + deadBosses * 22f);
             if (bossSouls / 3 > ascensionRank) {
@@ -519,7 +516,7 @@ public class GameViewV8 extends GameViewV7Final {
 
     private void updateSurges(float dt) {
         surgeTimer -= dt;
-        if (surgeTimer > 0f) return;
+        if (surgeTimer > 0f || isBreathingPeriod()) return;
         int act = 1 + (int) (number(fElapsed) / 120f);
         int wave = Math.min(20, 5 + act * 2 + integer(fLevel) / 7);
         try {
@@ -527,17 +524,6 @@ public class GameViewV8 extends GameViewV7Final {
             if (act >= 5 && rng.nextFloat() < 0.30f) mSpawnEnemy.invoke(this, true);
         } catch (Exception ignored) { }
         surgeTimer = Math.max(18f, 37f - act * 1.7f);
-    }
-
-    private int countBosses() {
-        int count = 0;
-        for (Object e : snapshotEnemies()) {
-            try {
-                bindEnemy(e);
-                if (eType.getInt(e) == 4) count++;
-            } catch (Exception ignored) { }
-        }
-        return count;
     }
 
     private List<Object> snapshotEnemies() {
@@ -690,7 +676,7 @@ public class GameViewV8 extends GameViewV7Final {
         float x = 12f * scale, y = 142f * scale, bw = Math.min(150f * scale, w - 24f * scale), bh = 7f * scale;
         p.setColor(Color.argb(160, 8, 14, 16));
         c.drawRoundRect(new RectF(x, y, x + bw, y + bh), 4f * scale, 4f * scale, p);
-        float ratio = overdrive > 0f ? Math.max(0f, overdrive / 10f) : fury / 100f;
+        float ratio = overdrive > 0f ? Math.max(0f, overdrive / 6f) : fury / 100f;
         p.setColor(overdrive > 0f ? Color.rgb(255, 207, 65) : Color.rgb(70, 195, 230));
         c.drawRoundRect(new RectF(x, y, x + bw * ratio, y + bh), 4f * scale, 4f * scale, p);
         p.setColor(Color.WHITE);

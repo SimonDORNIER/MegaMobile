@@ -23,7 +23,7 @@ public class GameViewV10 extends GameViewV8 {
     private final Paint s10 = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private Field fElapsed, fKills, fScore, fLevel, fHp, fMaxHp, fDamage, fRange, fWeaponHaste, fInvuln;
-    private Field fPaused, fDead, fChoosing, fEnemies, fInMenu;
+    private Field fPaused, fDead, fChoosing, fEnemies, fInMenu, fVoid;
     private Method mSpawnEnemy, mGainXp, mDamageEnemy, mShowBanner;
 
     private Class<?> enemyClass;
@@ -31,7 +31,7 @@ public class GameViewV10 extends GameViewV8 {
 
     private long lastMs10;
     private boolean previousMenu10 = true;
-    private float lastElapsed10;
+    private int lastRunGeneration10 = -1;
     private int lastKills10;
     private float noKillTimer;
     private float voidCd = 7f;
@@ -67,6 +67,7 @@ public class GameViewV10 extends GameViewV8 {
             fDead = baseField("dead");
             fChoosing = baseField("choosing");
             fEnemies = baseField("enemies");
+            fVoid = baseField("voidLevel");
             fInMenu = GameViewFinal.class.getDeclaredField("inMenu");
             fInMenu.setAccessible(true);
 
@@ -133,10 +134,9 @@ public class GameViewV10 extends GameViewV8 {
 
     private void updateV10(float dt) {
         boolean menu = inMenu10();
-        float elapsed = number(fElapsed);
-        if ((previousMenu10 && !menu) || (lastElapsed10 > 5f && elapsed + 1f < lastElapsed10)) resetV10();
+        if ((previousMenu10 && !menu) || lastRunGeneration10 != getRunGeneration()) resetV10();
         previousMenu10 = menu;
-        lastElapsed10 = elapsed;
+        lastRunGeneration10 = getRunGeneration();
         if (statusLife > 0f) statusLife -= dt;
         if (voidFx > 0f) voidFx -= dt;
 
@@ -170,6 +170,7 @@ public class GameViewV10 extends GameViewV8 {
     }
 
     private void antiStall() {
+        if (isBreathingPeriod()) return;
         List<Object> list = enemies10();
         int enemyCount = list == null ? 0 : list.size();
         if (enemyCount < 4 && noKillTimer > 4.5f) {
@@ -177,8 +178,8 @@ public class GameViewV10 extends GameViewV8 {
             noKillTimer = 1f;
             return;
         }
-        if (noKillTimer > 9f) {
-            spawn(false, 10 + Math.min(18, integer(fLevel) / 2));
+        if (noKillTimer > 9f && enemyCount < combatHordeTarget()) {
+            spawn(false, Math.min(6, combatHordeTarget() - enemyCount));
             noKillTimer = 2f;
             status("RENFORTS — LA HORDE NE S'ARRÊTE JAMAIS");
         }
@@ -213,17 +214,17 @@ public class GameViewV10 extends GameViewV8 {
     }
 
     private void updateVoidPulse(float dt) {
-        int level = integer(fLevel);
-        if (level < 28) return;
+        int rank = integer(fVoid);
+        if (rank <= 0) return;
         voidCd -= dt;
         if (voidCd > 0f) return;
-        float haste = Math.max(1f, number(fWeaponHaste));
-        voidCd = Math.max(1.15f, Math.max(3.4f, 7.2f - level * 0.045f) / haste);
+        float haste = Math.max(1f, globalWeaponHaste());
+        voidCd = Math.max(0.8f, (6.2f - rank * 0.35f) / haste);
 
         float px = baseFloat("px"), py = baseFloat("py");
         float areaScale = 1f + Math.max(0f, number(fRange) / 420f - 1f) * 0.65f;
-        float radius = Math.min(720f, (250f + level * 3.0f) * areaScale);
-        float dmg = number(fDamage) * (1.85f + Math.min(2.0f, level * 0.025f));
+        float radius = Math.min(660f, (210f + rank * 22f) * areaScale);
+        float dmg = number(fDamage) * (1.4f + rank * 0.22f);
         int hits = 0;
         for (Object e : snapshotEnemies10()) {
             float ex = enemyFloat(e, "x"), ey = enemyFloat(e, "y");
@@ -236,14 +237,13 @@ public class GameViewV10 extends GameViewV8 {
         if (hits > 0) {
             voidFx = 0.42f;
             addScore(hits * 3);
-            if (level == 28) banner("ARME ÉVEILLÉE : IMPULSION DU VIDE");
         }
     }
 
     private void updateCataclysm(float dt) {
         if (number(fElapsed) < 120f) return;
         cataclysmCd -= dt;
-        if (cataclysmCd > 0f) return;
+        if (cataclysmCd > 0f || isBreathingPeriod()) return;
 
         int act = 1 + (int) (number(fElapsed) / 120f);
         int bosses = Math.min(4, 1 + act / 3);

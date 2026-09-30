@@ -55,6 +55,8 @@ public class GameViewV7 extends GameViewV6 {
     private int previousKills;
     private int combo;
     private int comboTier;
+    private int elitesWithoutSpecial;
+    private int elitesWithoutLoot;
     private float comboTimer;
     private String directorLabel = "";
     private float directorLabelLife;
@@ -256,6 +258,7 @@ public class GameViewV7 extends GameViewV6 {
     }
 
     private void promoteEliteWave() {
+        if (isBreathingPeriod()) return;
         List<Object> list = enemies();
         if (list == null || list.isEmpty()) return;
         int wanted = Math.min(1 + currentAct / 2, 4);
@@ -265,7 +268,7 @@ public class GameViewV7 extends GameViewV6 {
             if (elites.containsKey(enemy) || bossPhase2.containsKey(enemy)) continue;
             try {
                 bindEnemy(enemy);
-                if (eType.getInt(enemy) == 4) continue;
+                if (!claimElite(enemy)) continue;
                 int kind = rng.nextInt(3);
                 float hp = eHp.getFloat(enemy);
                 float maxHp = eMaxHp.getFloat(enemy);
@@ -273,20 +276,20 @@ public class GameViewV7 extends GameViewV6 {
                 float damage = eDamage.getFloat(enemy);
                 float radius = eR.getFloat(enemy);
                 if (kind == ELITE_BERSERKER) {
-                    eHp.setFloat(enemy, hp * 3.2f);
-                    eMaxHp.setFloat(enemy, maxHp * 3.2f);
-                    eSpeed.setFloat(enemy, speed * 1.48f);
-                    eDamage.setFloat(enemy, damage * 1.45f);
+                    eHp.setFloat(enemy, hp * 2.4f);
+                    eMaxHp.setFloat(enemy, maxHp * 2.4f);
+                    eSpeed.setFloat(enemy, speed * 1.28f);
+                    eDamage.setFloat(enemy, damage * 1.30f);
                     eR.setFloat(enemy, radius * 1.12f);
                 } else if (kind == ELITE_COLOSSUS) {
-                    eHp.setFloat(enemy, hp * 5.0f);
-                    eMaxHp.setFloat(enemy, maxHp * 5.0f);
+                    eHp.setFloat(enemy, hp * 3.6f);
+                    eMaxHp.setFloat(enemy, maxHp * 3.6f);
                     eSpeed.setFloat(enemy, speed * 0.76f);
-                    eDamage.setFloat(enemy, damage * 1.9f);
+                    eDamage.setFloat(enemy, damage * 1.6f);
                     eR.setFloat(enemy, radius * 1.48f);
                 } else {
-                    eHp.setFloat(enemy, hp * 2.5f);
-                    eMaxHp.setFloat(enemy, maxHp * 2.5f);
+                    eHp.setFloat(enemy, hp * 2.0f);
+                    eMaxHp.setFloat(enemy, maxHp * 2.0f);
                     eSpeed.setFloat(enemy, speed * 1.20f);
                     eDamage.setFloat(enemy, damage * 1.32f);
                     eR.setFloat(enemy, radius * 0.95f);
@@ -310,12 +313,17 @@ public class GameViewV7 extends GameViewV6 {
                 try {
                     bindEnemy(enemy);
                     float lootRoll = rng.nextFloat();
-                    if (lootRoll < 0.12f) {
+                    if (GameBalance.specialEliteDrop(elitesWithoutSpecial, lootRoll)) {
                         dropChest(eX.getFloat(enemy), eY.getFloat(enemy), CHEST_SPECIAL_ARTIFACT);
+                        elitesWithoutSpecial = elitesWithoutLoot = 0;
                         label("RELIQUAIRE MAUDIT LÂCHÉ");
-                    } else if (lootRoll < 0.62f) {
-                        dropChest(eX.getFloat(enemy), eY.getFloat(enemy), CHEST_ARTIFACT);
-                        label("COFFRE D'ARTEFACT LÂCHÉ");
+                    } else {
+                        elitesWithoutSpecial++;
+                        if (lootRoll < 0.62f || elitesWithoutLoot >= 2) {
+                            dropChest(eX.getFloat(enemy), eY.getFloat(enemy), CHEST_ARTIFACT);
+                            elitesWithoutLoot = 0;
+                            label("COFFRE D'ARTEFACT LÂCHÉ");
+                        } else elitesWithoutLoot++;
                     }
                 } catch (Exception ignored) { }
                 eliteReward(info.kind);
@@ -375,9 +383,10 @@ public class GameViewV7 extends GameViewV6 {
     }
 
     private void applyPressure() {
+        if (isBreathingPeriod()) return;
         List<Object> list = enemies();
         int count = list == null ? 0 : list.size();
-        int target = Math.min(180, 14 + currentAct * 9 + (int) (number(fElapsed) / 24f));
+        int target = combatHordeTarget();
         if (count >= target) return;
         int batch = Math.min(2 + currentAct / 2, 5);
         try {

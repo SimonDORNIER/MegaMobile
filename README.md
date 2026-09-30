@@ -3,6 +3,27 @@
 MegaMobile est un jeu mobile survivor natif Android, conçu pour des parties infinies en orientation portrait.
 
 ## Version actuelle
+**V1.6.0 — ASSAUT DES HÉROS**
+
+La V1.6.0 donne un rythme aux combats et récompense davantage l'exploration, tout en conservant les parties infinies et l'auto-sélection sans pause.
+
+### Changements V1.6.0
+- vagues en quatre temps : approche, assaut, pic puis dix secondes d'accalmie ; tous les systèmes de renfort partagent les mêmes limites ;
+- premiers champions et boss moins résistants, frappes de zone annoncées et tirs d'archers précédés d'une visée fixe ;
+- dégâts de contact espacés pour éviter de perdre tous les PV dans une pile d'ennemis ;
+- coffres sur les ennemis ordinaires, chances croissantes de reliques maudites et protections contre les longues séries sans butin ;
+- armes de boss au moins épiques, nouvelle arme proposée tant que l'arsenal est incomplet, puis améliorations et maîtrise ;
+- familiers spectraux et Impulsion du Vide obtenus exclusivement dans les coffres de boss et mini-boss ;
+- choix distincts, bonus saturés retirés, soins adaptés aux PV et sélection automatique attentive aux synergies et à la survie ;
+- indications pour les quatre évolutions d'armes, couleurs par utilité et cartes élargies quand il reste moins de trois choix ;
+- compléter une zone soigne, accorde un répit et fait apparaître un coffre d'artefact, maudit une zone sur trois ;
+- Furie, vol de vie et croissance des statistiques rééquilibrés ; les boosts temporaires préservent les améliorations permanentes ;
+- l'explosion conserve l'XP et les récompenses, l'Ascension compte les vrais boss tués et les niveaux en attente se résolvent sans nouvelle gemme.
+
+### Validation
+Les tests `tools/tests/test_gameplay_balance.py` exécutent les règles réelles du combat et des récompenses avec des appels Android inertes. Ils couvrent le rythme, les plafonds, le butin, les choix, l'auto-sélection, l'XP en attente, l'esquive des boss, l'explosion, le vol de vie et les boosts temporaires. Le workflow vérifie aussi l'APK avec les outils Android. Le rendu et le ressenti tactile restent à vérifier sur téléphone.
+
+## Version précédente
 **V1.5.1 — AUTO-SÉLECTION FLUIDE**
 
 La V1.5.1 laisse toute la partie tourner pendant les choix automatiques.

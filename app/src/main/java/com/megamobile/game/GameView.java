@@ -76,6 +76,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private float bossCd;
     private float miniBossCd;
     private int kills;
+    private int bossKills;
+    private int runGeneration;
+    private int normalKillsWithoutChest;
+    private int chestsWithoutLegendary;
+    private float breathingUntil;
+    private float soulHealBudget;
+    private int lastWavePhase;
     private int score;
     private String banner = "";
     private float bannerLife;
@@ -95,6 +102,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private float regen;
     private float magnet = 170f;
     private float weaponHaste = 1f;
+    private boolean combatFrenzy;
     private int level = 1;
     private float xp;
     private float nextXp = 12f;
@@ -103,6 +111,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private int orbitLevel;
     private int lightningLevel;
     private int rocketLevel;
+    private int droneLevel;
+    private int voidLevel;
     private float auraCd;
     private float lightningCd;
     private float rocketCd;
@@ -147,6 +157,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private int chestRevealKind;
     private boolean levelRevealing;
     private float levelRevealTime;
+    private float autoSelectTime;
     private final RectF[] choiceRects = {new RectF(), new RectF(), new RectF()};
     private final RectF pauseRect = new RectF();
     private final RectF autoRect = new RectF();
@@ -195,6 +206,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void resetGame() {
+        runGeneration++;
         enemies.clear();
         shots.clear();
         gems.clear();
@@ -206,15 +218,19 @@ public class GameView extends View implements Choreographer.FrameCallback {
         elapsed = 0f;
         difficulty = 1f;
         spawnCd = 0.2f;
-        bossCd = 34f;
-        miniBossCd = 16f;
+        bossCd = 44f;
+        miniBossCd = 18f;
         kills = 0;
+        bossKills = normalKillsWithoutChest = chestsWithoutLegendary = 0;
+        breathingUntil = 0f;
+        soulHealBudget = 0f;
+        lastWavePhase = 0;
         score = 0;
         px = py = 0f;
         hp = maxHp = 100f;
         speed = remote.playerBaseSpeed;
         damage = 20f;
-        fireInterval = 0.52f;
+        fireInterval = 0.46f;
         fireCd = 0f;
         range = 420f;
         multi = 1;
@@ -223,10 +239,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
         regen = 0f;
         magnet = remote.xpMagnet;
         weaponHaste = 1f;
+        combatFrenzy = false;
         level = 1;
         xp = 0f;
-        nextXp = 12f;
+        nextXp = GameBalance.xpForLevel(level);
         auraLevel = orbitLevel = lightningLevel = rocketLevel = 0;
+        droneLevel = voidLevel = 0;
         auraCd = lightningCd = rocketCd = 0f;
         invuln = 0f;
         artifactCrownLevel = artifactWardLevel = artifactCompassLevel = artifactHourglassLevel = 0;
@@ -253,6 +271,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         levelRevealing = false;
         levelRevealTime = 0f;
         currentChoices.clear();
+        autoSelectTime = 0f;
         banner = "SURVIS";
         bannerLife = 1.8f;
     }
@@ -273,8 +292,14 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private void update(float dt) {
         ensureWorldReady();
         elapsed += dt;
-        difficulty = 1f + elapsed / Math.max(25f, remote.difficultySeconds)
-                + (float) Math.pow(elapsed / 360f, 1.35) * 0.7f;
+        difficulty = GameBalance.difficulty(elapsed, level, remote.difficultySeconds);
+        soulHealBudget = Math.min(maxHp * 0.04f, soulHealBudget + maxHp * 0.04f * dt);
+        int phase = GameBalance.wavePhase(elapsed);
+        if (phase != lastWavePhase) {
+            lastWavePhase = phase;
+            showBanner(phase == 3 ? "ACCALMIE — RÉCUPÈRE LE BUTIN"
+                    : phase == 2 ? "ASSAUT HÉROÏQUE" : phase == 0 ? "LES HÉROS SE REGROUPENT" : "LA HORDE APPROCHE");
+        }
         if (bannerLife > 0f) bannerLife -= dt;
         if (invuln > 0f) invuln -= dt;
         if (regen > 0f && hp > 0f) hp = Math.min(maxHp, hp + regen * dt);
@@ -290,8 +315,9 @@ public class GameView extends View implements Choreographer.FrameCallback {
             lastMoveX = nx;
             lastMoveY = ny;
         }
-        px += nx * speed * dt;
-        py += ny * speed * dt;
+        float moveSpeed = speed * (combatFrenzy ? 1.10f : 1f);
+        px += nx * moveSpeed * dt;
+        py += ny * moveSpeed * dt;
         clampPlayerToWorld();
         updateWorldObjectives(dt);
 
@@ -310,23 +336,24 @@ public class GameView extends View implements Choreographer.FrameCallback {
         cameraZoom += (targetZoom - cameraZoom) * zoomBlend;
 
         spawnCd -= dt;
-        int dynamicCap = Math.min(remote.enemyCap, 48 + (int) (elapsed * 0.9f));
+        int dynamicCap = combatEnemyCap();
         if (spawnCd <= 0f && enemies.size() < dynamicCap) {
             int batch = difficulty > 5f ? 2 : 1;
             for (int i = 0; i < batch && enemies.size() < dynamicCap; i++) spawnEnemy(false);
             float speedup = Math.min(3.6f, 0.9f + (float) Math.sqrt(difficulty));
-            spawnCd = Math.max(0.075f, remote.spawnInterval / speedup);
+            float intensity = isBreathingPeriod() ? 0.40f : GameBalance.waveIntensity(elapsed);
+            spawnCd = Math.max(0.12f, remote.spawnInterval / (speedup * intensity));
         }
 
         bossCd -= dt;
-        if (bossCd <= 0f) {
+        if (bossCd <= 0f && !isBreathingPeriod()) {
             spawnEnemy(true);
             bossCd = Math.max(24f, remote.bossInterval / Math.min(1.8f, 0.85f + difficulty * 0.06f));
             showBanner("BOSS");
         }
 
         miniBossCd -= dt;
-        if (miniBossCd <= 0f) {
+        if (miniBossCd <= 0f && !isBreathingPeriod()) {
             spawnEnemy(ENEMY_MINIBOSS);
             miniBossCd = Math.max(18f, 31f / Math.min(2.0f, 0.9f + difficulty * 0.08f));
             showBanner("CHAMPION HÉROÏQUE — ARME À RÉCUPÉRER");
@@ -337,6 +364,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         updateEnemies(dt);
         updateGems(dt);
         updateChests();
+        processPendingLevel();
 
         if (hp <= 0f && !dead) {
             hp = 0f;
@@ -347,10 +375,11 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void updateWeapons(float dt) {
+        float haste = globalWeaponHaste();
         fireCd -= dt;
         if (fireCd <= 0f) {
             fireBasicWeapon();
-            fireCd = Math.max(0.055f, fireInterval / weaponHaste);
+            fireCd = Math.max(0.055f, fireInterval / haste);
         }
 
         if (auraLevel > 0) {
@@ -362,7 +391,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                     Enemy e = enemies.get(i);
                     if (distanceSq(px, py, e.x, e.y) <= radius * radius) damageEnemy(e, dmg, false);
                 }
-                auraCd = Math.max(0.08f, (0.48f - auraLevel * 0.025f) / weaponHaste);
+                auraCd = Math.max(0.08f, (0.48f - auraLevel * 0.025f) / haste);
             }
         }
 
@@ -380,7 +409,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                     float rr = e.r + 15f;
                     if (distanceSq(bx, by, e.x, e.y) < rr * rr) {
                         damageEnemy(e, damage * (0.45f + orbitLevel * 0.09f), false);
-                        e.orbitHitCd = Math.max(0.07f, 0.24f / weaponHaste);
+                        e.orbitHitCd = Math.max(0.07f, 0.24f / haste);
                         break;
                     }
                 }
@@ -391,7 +420,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
             lightningCd -= dt;
             if (lightningCd <= 0f) {
                 fireLightning();
-                lightningCd = Math.max(0.24f, (2.5f - lightningLevel * 0.22f) / weaponHaste);
+                lightningCd = Math.max(0.24f, (2.5f - lightningLevel * 0.22f) / haste);
             }
         }
 
@@ -416,7 +445,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                         shots.add(s);
                     }
                 }
-                rocketCd = Math.max(0.28f, (3.3f - rocketLevel * 0.28f) / weaponHaste);
+                rocketCd = Math.max(0.28f, (3.3f - rocketLevel * 0.28f) / haste);
             }
         }
     }
@@ -521,11 +550,29 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 e.x += dx / l * e.speed * dir * dt;
                 e.y += dy / l * e.speed * dir * dt;
                 e.shootCd -= dt;
+                if (l >= 780f) {
+                    e.shootCd = Math.max(0.65f, e.shootCd);
+                    e.aimLocked = false;
+                }
+                if (e.shootCd <= 0.55f && !e.aimLocked && l < 780f) {
+                    e.aimLocked = true;
+                    e.aimX = px;
+                    e.aimY = py;
+                }
                 if (e.shootCd <= 0f && l < 780f) {
+                    float aimDx = e.aimX - e.x, aimDy = e.aimY - e.y;
+                    float aimLength = Math.max(1f, (float) Math.hypot(aimDx, aimDy));
                     float projectileSpeed = 250f + Math.min(180f, difficulty * 12f);
-                    shots.add(new Shot(SHOT_ENEMY, e.x, e.y, dx / l * projectileSpeed, dy / l * projectileSpeed,
+                    shots.add(new Shot(SHOT_ENEMY, e.x, e.y, aimDx / aimLength * projectileSpeed, aimDy / aimLength * projectileSpeed,
                             8f, 4f, e.damage));
-                    e.shootCd = Math.max(0.85f, 2.6f - difficulty * 0.08f);
+                    e.shootCd = Math.max(1.15f, 2.8f - difficulty * 0.06f);
+                    e.aimLocked = false;
+                }
+            } else if (e.type == ENEMY_BOSS || e.type == ENEMY_MINIBOSS) {
+                updateChampionAttack(e, dt, l);
+                if (e.warning <= 0f) {
+                    e.x += dx / l * e.speed * dt;
+                    e.y += dy / l * e.speed * dt;
                 }
             } else {
                 e.x += dx / l * e.speed * dt;
@@ -533,12 +580,31 @@ public class GameView extends View implements Choreographer.FrameCallback {
             }
 
             float rr = e.r + 17f;
-            if (l < rr && invuln <= 0f) {
-                takeDamage(e.damage * dt * 1.9f);
-                float push = 28f * dt;
+            if (distanceSq(px, py, e.x, e.y) < rr * rr && invuln <= 0f) {
+                takeDamage(e.damage * 0.70f);
+                float push = 32f;
                 e.x -= dx / l * push;
                 e.y -= dy / l * push;
             }
+        }
+    }
+
+    private void updateChampionAttack(Enemy e, float dt, float distance) {
+        if (e.warning > 0f) {
+            e.warning -= dt;
+            if (e.warning <= 0f) {
+                float radius = e.type == ENEMY_BOSS ? 125f : 94f;
+                if (distanceSq(px, py, e.aimX, e.aimY) < radius * radius) takeDamage(e.damage * 1.1f);
+                burst(e.aimX, e.aimY, Color.rgb(255, 164, 64), 26);
+                e.attackCd = e.type == ENEMY_BOSS ? 4.8f : 5.6f;
+            }
+            return;
+        }
+        e.attackCd -= dt;
+        if (e.attackCd <= 0f && distance < 620f) {
+            e.aimX = px;
+            e.aimY = py;
+            e.warning = e.type == ENEMY_BOSS ? 1.10f : 0.95f;
         }
     }
 
@@ -567,7 +633,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
             if (distanceSq(px, py, chest.x, chest.y) < 52f * 52f) {
                 chests.remove(i);
                 markObjectiveComplete(chest.objectiveId);
-                startChestReveal(chest.kind);
+                startChestReveal(chest.kind, chest.minimumRarity);
                 break;
             }
         }
@@ -596,11 +662,15 @@ public class GameView extends View implements Choreographer.FrameCallback {
         }
         if (chestRevealing) {
             chestRevealTime += dt;
-            if (chestRevealTime >= 2.05f) finishChestReveal();
+            if (chestRevealTime >= (autoChoice ? 0.35f : 2.05f)) finishChestReveal();
         }
         if (levelRevealing) {
             levelRevealTime += dt;
-            if (levelRevealTime >= 0.72f) finishLevelReveal();
+            if (levelRevealTime >= (autoChoice ? 0.10f : 0.72f)) finishLevelReveal();
+        }
+        if (autoChoice && choosing && !currentChoices.isEmpty() && !paused && !dead) {
+            autoSelectTime -= dt;
+            if (autoSelectTime <= 0f) selectBestUpgrade();
         }
         if (bannerLife > 0f && (paused || dead || choosing)) bannerLife -= dt;
     }
@@ -710,6 +780,9 @@ public class GameView extends View implements Choreographer.FrameCallback {
         worldRadius += Math.max(getWidth(), getHeight()) * 0.58f;
         score += 750 * worldStage;
         generateWorldStage();
+        hp = Math.min(maxHp, hp + maxHp * 0.18f);
+        breathingUntil = Math.max(breathingUntil, elapsed + 6f);
+        dropChest(px, py, worldStage % 3 == 0 ? CHEST_SPECIAL_ARTIFACT : CHEST_ARTIFACT);
         showBanner("CARTE AGRANDIE — ZONE " + worldStage);
     }
 
@@ -735,6 +808,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void spawnEnemy(int forcedType) {
+        if (forcedType < ENEMY_BOSS && enemies.size() >= combatEnemyCap()) return;
+        if (forcedType == ENEMY_BOSS || forcedType == ENEMY_MINIBOSS) {
+            int count = 0;
+            for (Enemy existing : enemies) if (existing.type == forcedType) count++;
+            if (count >= (forcedType == ENEMY_BOSS && elapsed >= 480f ? 3 : 2)) return;
+        }
         float screenRadius = (Math.max(getWidth(), getHeight()) * 0.72f + 110f)
                 / Math.max(0.72f, cameraZoom);
         float angle = random.nextFloat() * (float) (Math.PI * 2.0);
@@ -746,6 +825,12 @@ public class GameView extends View implements Choreographer.FrameCallback {
             if (distance > limit && distance > 0f) {
                 x = x / distance * limit;
                 y = y / distance * limit;
+            }
+            // A clamped spawn near the edge must never appear on top of the player.
+            if (distanceSq(px, py, x, y) < 280f * 280f) {
+                float playerRadius = Math.max(1f, (float) Math.hypot(px, py));
+                x = px - px / playerRadius * Math.min(screenRadius, worldRadius * 0.75f);
+                y = py - py / playerRadius * Math.min(screenRadius, worldRadius * 0.75f);
             }
         }
 
@@ -771,17 +856,18 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case ENEMY_SHOOTER:
                 baseHp = 58f; baseSpeed = 70f; baseDamage = 11f; radius = 18f; break;
             case ENEMY_BOSS:
-                baseHp = 800f + elapsed * 4f; baseSpeed = 48f; baseDamage = 25f; radius = 48f; break;
+                baseHp = 460f + elapsed * 1.5f; baseSpeed = 54f; baseDamage = 22f; radius = 48f; break;
             case ENEMY_MINIBOSS:
-                baseHp = 320f + elapsed * 2.5f; baseSpeed = 62f; baseDamage = 19f; radius = 34f; break;
+                baseHp = 180f + elapsed * 0.8f; baseSpeed = 68f; baseDamage = 17f; radius = 34f; break;
             default:
-                baseHp = 42f; baseSpeed = 79f; baseDamage = 10f; radius = 18f;
+                baseHp = 34f; baseSpeed = 79f; baseDamage = 9f; radius = 18f;
         }
-        float hpScale = (float) Math.pow(difficulty, type == ENEMY_BOSS ? 1.32 : type == ENEMY_MINIBOSS ? 1.24 : 1.12);
+        float hpScale = (float) Math.pow(difficulty, type == ENEMY_BOSS ? 1.16 : type == ENEMY_MINIBOSS ? 1.10 : 1.06);
         float speedScale = 1f + Math.min(0.85f, (difficulty - 1f) * 0.055f);
         float damageScale = 1f + (difficulty - 1f) * 0.14f;
         Enemy e = new Enemy(type, x, y, radius, baseHp * hpScale, baseSpeed * speedScale, baseDamage * damageScale);
-        e.shootCd = 0.5f + random.nextFloat() * 1.6f;
+        e.shootCd = 1.2f + random.nextFloat() * 1.6f;
+        e.attackCd = 3.5f + random.nextFloat() * 1.5f;
         enemies.add(e);
     }
 
@@ -790,7 +876,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         // Le critique est un bonus global : aura, lames, foudre, roquettes,
         // drones et armes futures passent tous par cette méthode.
         boolean critHit = random.nextFloat() < crit;
-        float actual = amount * (critHit ? 1.65f : 1f);
+        float actual = amount * (critHit ? 1.65f : 1f) * (combatFrenzy ? 1.32f : 1f);
         if (artifactBloodPactLevel > 0 && hp <= maxHp * 0.5f) actual *= 1.55f;
         e.hp -= actual;
         e.flash = 0.08f;
@@ -806,27 +892,40 @@ public class GameView extends View implements Choreographer.FrameCallback {
         gems.add(new Gem(e.x, e.y, value));
         burst(e.x, e.y, colorForEnemy(e.type), e.type == ENEMY_BOSS ? 34 : e.type == ENEMY_MINIBOSS ? 22 : 10);
         if (artifactSoulReaperLevel > 0) {
-            hp = Math.min(maxHp, hp + Math.min(1.8f, maxHp * 0.008f));
+            float heal = Math.min(soulHealBudget, Math.min(1.8f, maxHp * 0.008f));
+            hp = Math.min(maxHp, hp + heal);
+            soulHealBudget -= heal;
         }
         if (e.type == ENEMY_BOSS || e.type == ENEMY_MINIBOSS) {
-            dropChest(e.x, e.y, CHEST_WEAPON);
+            if (e.type == ENEMY_BOSS) bossKills++;
+            chests.add(new Chest(e.x, e.y, CHEST_WEAPON, -1, e.type == ENEMY_BOSS ? 2 : 1));
+            breathingUntil = Math.max(breathingUntil, elapsed + (e.type == ENEMY_BOSS ? 6f : 3f));
             showBanner(e.type == ENEMY_BOSS ? "ARME DU SEIGNEUR HÉROÏQUE" : "ARME DU CHAMPION");
+        } else {
+            normalKillsWithoutChest++;
+            if (chests.size() < 18 && GameBalance.commonChestDrop(normalKillsWithoutChest, random.nextFloat())) {
+                dropChest(e.x, e.y, CHEST_STANDARD);
+                normalKillsWithoutChest = 0;
+            }
         }
     }
 
     private void takeDamage(float amount) {
-        if (invuln > 0f) return;
+        if (invuln > 0f || amount <= 0f) return;
         float reduction = Math.min(0.72f, armor / (armor + 75f));
         hp -= amount * (1f - reduction);
-        if (amount > 2f) invuln = 0.08f;
+        invuln = 0.42f;
     }
 
     private void gainXp(float amount) {
         xp += amount;
-        while (xp >= nextXp && !choosing) {
+    }
+
+    private void processPendingLevel() {
+        if (xp >= nextXp && !choosing && hp > 0f) {
             xp -= nextXp;
             level++;
-            nextXp = 12f + (float) Math.pow(level, 1.32) * 6.4f;
+            nextXp = GameBalance.xpForLevel(level);
             startLevelReveal();
         }
     }
@@ -856,6 +955,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
     }
 
     private void startChestReveal(int chestKind) {
+        startChestReveal(chestKind, 0);
+    }
+
+    private void startChestReveal(int chestKind, int minimumRarity) {
         choosing = true;
         chestChoice = true;
         chestRevealing = true;
@@ -865,7 +968,10 @@ public class GameView extends View implements Choreographer.FrameCallback {
         choiceSource = chestKind == CHEST_WEAPON ? CHOICE_WEAPON
                 : chestKind == CHEST_ARTIFACT ? CHOICE_ARTIFACT
                 : chestKind == CHEST_SPECIAL_ARTIFACT ? CHOICE_SPECIAL_ARTIFACT : CHOICE_STANDARD;
-        chestRevealRarity = rollRarity(choiceSource);
+        chestRevealRarity = GameBalance.chestRarity(choiceSource, random.nextFloat(), chestsWithoutLegendary, minimumRarity);
+        if (choiceSource != CHOICE_SPECIAL_ARTIFACT) {
+            chestsWithoutLegendary = chestRevealRarity == 3 ? 0 : chestsWithoutLegendary + 1;
+        }
         // Une sélection automatique ne doit pas simuler un relâchement du doigt :
         // le joueur reprend ainsi immédiatement sa trajectoire après le choix.
         if (!autoChoice) {
@@ -891,40 +997,83 @@ public class GameView extends View implements Choreographer.FrameCallback {
             joystickPointer = -1;
         }
         currentChoices.clear();
-        for (int i = 0; i < 3; i++) {
-            Upgrade candidate;
-            int guard = 0;
-            do {
-                candidate = randomUpgrade(source, forcedRarity);
-                guard++;
-            } while (containsCode(candidate.code) && guard < 30);
-            currentChoices.add(candidate);
-        }
-        if (autoChoice) {
-            postDelayed(() -> {
-                if (choosing && !currentChoices.isEmpty()) {
-                    Upgrade best = currentChoices.get(0);
-                    for (Upgrade u : currentChoices) if (u.rarity > best.rarity) best = u;
-                    applyUpgrade(best);
+        ArrayList<String> codes = availableUpgrades(source);
+        Collections.shuffle(codes, random);
+        // A boss chest always offers a new weapon while the arsenal is incomplete.
+        if (source == CHOICE_WEAPON) {
+            boolean newWeaponOffered = false;
+            for (int i = 0; i < Math.min(3, codes.size()); i++) if (weaponLevelFor(codes.get(i)) == 0) newWeaponOffered = true;
+            if (!newWeaponOffered) {
+                for (int i = 3; i < codes.size(); i++) {
+                    if (weaponLevelFor(codes.get(i)) == 0) {
+                        Collections.swap(codes, 0, i);
+                        break;
+                    }
                 }
-            }, 220L);
+            }
+        }
+        for (int i = 0; i < Math.min(3, codes.size()); i++) {
+            String code = codes.get(i);
+            int rarity = forcedRarity >= 0 ? forcedRarity : rollRarity(source);
+            currentChoices.add(new Upgrade(code, rarity, titleFor(code), descriptionFor(code, rarity)));
+        }
+        autoSelectTime = 0.08f;
+    }
+
+    private void selectBestUpgrade() {
+        Upgrade best = null;
+        float bestScore = -1f;
+        for (Upgrade u : currentChoices) {
+            int weaponLevel = weaponLevelFor(u.code);
+            boolean synergy = (u.code.equals("AURA") && regen >= 0.8f)
+                    || (u.code.equals("ORBIT") && speed >= 330f)
+                    || (u.code.equals("LIGHTNING") && crit >= 0.14f)
+                    || (u.code.equals("ROCKET") && multi >= 3);
+            float score = GameBalance.choiceScore(u.code, u.rarity, hp / maxHp, weaponHaste,
+                    multi, weaponLevel, weaponLevel >= 0, synergy);
+            if (score > bestScore) { best = u; bestScore = score; }
+        }
+        if (best != null) applyUpgrade(best);
+    }
+
+    private int weaponLevelFor(String code) {
+        switch (code) {
+            case "AURA": return auraLevel;
+            case "ORBIT": return orbitLevel;
+            case "LIGHTNING": return lightningLevel;
+            case "ROCKET": return rocketLevel;
+            case "DRONE": return droneLevel;
+            case "VOID": return voidLevel;
+            default: return -1;
         }
     }
 
-    private boolean containsCode(String code) {
-        for (Upgrade u : currentChoices) if (u.code.equals(code)) return true;
-        return false;
+    private boolean usefulStat(String code) {
+        float value;
+        switch (code) {
+            case "SPEED": value = speed; break;
+            case "RANGE": value = range; break;
+            case "MAGNET": value = magnet; break;
+            case "CRIT": value = crit; break;
+            case "ARMOR": value = armor; break;
+            case "REGEN": value = regen; break;
+            case "FIRE": value = weaponHaste; break;
+            case "MULTI": value = multi; break;
+            case "HEAL": value = hp / maxHp; break;
+            default: return true;
+        }
+        return GameBalance.statUseful(code, value);
     }
 
-    private Upgrade randomUpgrade(int source, int forcedRarity) {
-        int rarity = forcedRarity >= 0 ? forcedRarity : rollRarity(source);
+    private ArrayList<String> availableUpgrades(int source) {
         String[] base = {"DMG", "FIRE", "SPEED", "HP", "MAGNET", "CRIT", "ARMOR", "REGEN", "RANGE", "MULTI"};
         ArrayList<String> codes = new ArrayList<>();
         if (source == CHOICE_WEAPON) {
-            codes.add("AURA");
-            codes.add("ORBIT");
-            codes.add("LIGHTNING");
-            codes.add("ROCKET");
+            String[] weapons = {"AURA", "ORBIT", "LIGHTNING", "ROCKET", "DRONE", "VOID"};
+            for (String code : weapons) {
+                if (weaponLevelFor(code) < (code.equals("DRONE") ? 4 : GameBalance.MAX_WEAPON_LEVEL)) codes.add(code);
+            }
+            if (codes.isEmpty()) codes.add("ARSENAL");
         } else if (source == CHOICE_ARTIFACT) {
             codes.add("ART_CROWN");
             codes.add("ART_WARD");
@@ -933,8 +1082,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
         } else if (source == CHOICE_SPECIAL_ARTIFACT) {
             if (artifactSoulReaperLevel == 0) codes.add("ART_SOUL_REAPER");
             if (artifactBloodPactLevel == 0) codes.add("ART_BLOOD_PACT");
-            if (artifactBlackMirrorLevel == 0) codes.add("ART_BLACK_MIRROR");
-            if (artifactVoidHeartLevel == 0) codes.add("ART_VOID_HEART");
+            if (artifactBlackMirrorLevel == 0 && (usefulStat("MULTI") || usefulStat("CRIT"))) codes.add("ART_BLACK_MIRROR");
+            if (artifactVoidHeartLevel == 0 && (usefulStat("RANGE") || usefulStat("MAGNET") || usefulStat("FIRE"))) codes.add("ART_VOID_HEART");
             // Une fois les quatre reliques maudites trouvées, le coffre reste
             // utile en renforçant un artefact classique.
             if (codes.isEmpty()) {
@@ -944,36 +1093,16 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 codes.add("ART_HOURGLASS");
             }
         } else {
-            codes.add("HEAL");
-            Collections.addAll(codes, base);
+            if (usefulStat("HEAL")) codes.add("HEAL");
+            for (String code : base) if (usefulStat(code)) codes.add(code);
         }
-        String code = codes.get(random.nextInt(codes.size()));
-        return new Upgrade(code, rarity, titleFor(code), descriptionFor(code, rarity));
+        if (!usefulStat("FIRE")) codes.remove("ART_HOURGLASS");
+        if (!usefulStat("SPEED") && !usefulStat("RANGE") && !usefulStat("MAGNET")) codes.remove("ART_COMPASS");
+        return codes;
     }
 
     private int rollRarity(int source) {
-        if (source == CHOICE_SPECIAL_ARTIFACT) return 3;
-        float r = random.nextFloat();
-        if (source == CHOICE_ARTIFACT) {
-            if (r < 0.18f) return 3;
-            if (r < 0.64f) return 2;
-            return 1;
-        }
-        if (source == CHOICE_WEAPON) {
-            if (r < 0.14f) return 3;
-            if (r < 0.52f) return 2;
-            return 1;
-        }
-        if (source == CHOICE_STANDARD) {
-            if (r < 0.08f) return 3;
-            if (r < 0.33f) return 2;
-            if (r < 0.78f) return 1;
-            return 0;
-        }
-        if (r < 0.025f) return 3;
-        if (r < 0.12f) return 2;
-        if (r < 0.39f) return 1;
-        return 0;
+        return GameBalance.rarity(source, random.nextFloat());
     }
 
     private String titleFor(String code) {
@@ -992,6 +1121,9 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "ORBIT": return orbitLevel == 0 ? "NOUVELLE ARME : ORBITALES" : "ORBITALES +";
             case "LIGHTNING": return lightningLevel == 0 ? "NOUVELLE ARME : FOUDRE" : "FOUDRE +";
             case "ROCKET": return rocketLevel == 0 ? "NOUVELLE ARME : ROQUETTES" : "ROQUETTES +";
+            case "DRONE": return droneLevel == 0 ? "NOUVELLE ARME : FAMILIERS" : "FAMILIERS +";
+            case "VOID": return voidLevel == 0 ? "NOUVELLE ARME : VIDE" : "IMPULSION DU VIDE +";
+            case "ARSENAL": return "MAÎTRISE DES ARMES";
             case "HEAL": return "SOINS";
             case "ART_CROWN": return artifactCrownLevel == 0 ? "ARTEFACT : COURONNE" : "COURONNE +" + artifactCrownLevel;
             case "ART_WARD": return artifactWardLevel == 0 ? "ARTEFACT : ÉGIDE" : "ÉGIDE +" + artifactWardLevel;
@@ -1008,7 +1140,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private String descriptionFor(String code, int rarity) {
         float m = rarityMultiplier(rarity);
         switch (code) {
-            case "DMG": return "+" + Math.round(18f * m) + "% dégâts";
+            case "DMG": return "+" + Math.round((GameBalance.powerGain(damage, 0.18f * m) / damage - 1f) * 100f) + "% dégâts";
             case "FIRE": return "Toutes les armes : +" + Math.round(13f * m) + "% cadence";
             case "SPEED": return "+" + Math.round(10f * m) + "% déplacement";
             case "HP": return "+" + Math.round(18f * m) + " PV max + soin";
@@ -1018,10 +1150,13 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "REGEN": return "+" + oneDecimal(0.45f * m) + " PV/s";
             case "RANGE": return "+" + Math.round(12f * m) + "% portée et zones d'effet";
             case "MULTI": return "Balles et roquettes : +" + (rarity >= 2 ? 2 : 1) + " projectile";
-            case "AURA": return "Dégâts continus autour de toi";
-            case "ORBIT": return "Lames qui tournent autour de toi";
-            case "LIGHTNING": return "Éclairs en chaîne automatiques";
-            case "ROCKET": return "Roquettes chercheuses explosives";
+            case "AURA": return auraLevel >= 3 ? "Rang 4 + 0.8 PV/s : Halo solaire" : "Dégâts continus autour de toi";
+            case "ORBIT": return orbitLevel >= 3 ? "Rang 4 + vitesse 330 : Vortex" : "Lames qui tournent autour de toi";
+            case "LIGHTNING": return lightningLevel >= 3 ? "Rang 4 + critique 14% : Cœur d'orage" : "Éclairs en chaîne automatiques";
+            case "ROCKET": return rocketLevel >= 3 ? "Rang 4 + 3 tirs : Essaim de siège" : "Roquettes chercheuses explosives";
+            case "DRONE": return "Familiers spectraux, cadence et portée globales";
+            case "VOID": return "Onde de choc, dégâts et portée augmentés";
+            case "ARSENAL": return "Toutes les armes maîtrisées : dégâts renforcés";
             case "HEAL": return "Récupère " + Math.round(28f * m) + "% des PV";
             case "ART_CROWN": return "Toutes les armes gagnent dégâts et critique";
             case "ART_WARD": return "PV, armure et régénération augmentés";
@@ -1055,28 +1190,31 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private void applyUpgrade(Upgrade u) {
         float m = rarityMultiplier(u.rarity);
         switch (u.code) {
-            case "DMG": damage *= 1f + 0.18f * m; break;
+            case "DMG": damage = GameBalance.powerGain(damage, 0.18f * m); break;
             case "FIRE": weaponHaste = Math.min(8f, weaponHaste * (1f + 0.13f * m)); break;
-            case "SPEED": speed *= 1f + 0.10f * m; break;
+            case "SPEED": speed = Math.min(GameBalance.MAX_SPEED, speed * (1f + 0.10f * m)); break;
             case "HP":
                 float add = 18f * m;
                 maxHp += add;
                 hp = Math.min(maxHp, hp + add);
                 break;
-            case "MAGNET": magnet += 40f * m; break;
-            case "CRIT": crit = Math.min(0.78f, crit + 0.05f * m); break;
-            case "ARMOR": armor += 9f * m; break;
-            case "REGEN": regen += 0.45f * m; break;
-            case "RANGE": range *= 1f + 0.12f * m; break;
+            case "MAGNET": magnet = Math.min(GameBalance.MAX_MAGNET, magnet + 40f * m); break;
+            case "CRIT": crit = Math.min(GameBalance.MAX_CRIT, crit + 0.05f * m); break;
+            case "ARMOR": armor = Math.min(GameBalance.MAX_ARMOR, armor + 9f * m); break;
+            case "REGEN": regen = Math.min(GameBalance.MAX_REGEN, regen + 0.45f * m); break;
+            case "RANGE": range = Math.min(GameBalance.MAX_RANGE, range * (1f + 0.12f * m)); break;
             case "MULTI": multi = Math.min(10, multi + (u.rarity >= 2 ? 2 : 1)); break;
-            case "AURA": auraLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
-            case "ORBIT": orbitLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
-            case "LIGHTNING": lightningLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
-            case "ROCKET": rocketLevel += 1 + (u.rarity >= 3 ? 1 : 0); break;
+            case "AURA": auraLevel = Math.min(8, auraLevel + 1 + (u.rarity >= 3 ? 1 : 0)); break;
+            case "ORBIT": orbitLevel = Math.min(8, orbitLevel + 1 + (u.rarity >= 3 ? 1 : 0)); break;
+            case "LIGHTNING": lightningLevel = Math.min(8, lightningLevel + 1 + (u.rarity >= 3 ? 1 : 0)); break;
+            case "ROCKET": rocketLevel = Math.min(8, rocketLevel + 1 + (u.rarity >= 3 ? 1 : 0)); break;
+            case "DRONE": droneLevel = Math.min(4, droneLevel + 1 + (u.rarity >= 3 ? 1 : 0)); break;
+            case "VOID": voidLevel = Math.min(8, voidLevel + 1 + (u.rarity >= 3 ? 1 : 0)); break;
+            case "ARSENAL": damage = GameBalance.powerGain(damage, 0.15f * m); break;
             case "HEAL": hp = Math.min(maxHp, hp + maxHp * Math.min(1f, 0.28f * m)); break;
             case "ART_CROWN":
                 artifactCrownLevel++;
-                damage *= 1f + 0.15f * m;
+                damage = GameBalance.powerGain(damage, 0.15f * m);
                 crit = Math.min(0.85f, crit + 0.045f * m);
                 break;
             case "ART_WARD":
@@ -1084,14 +1222,14 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 float wardHp = 14f * m;
                 maxHp += wardHp;
                 hp = Math.min(maxHp, hp + wardHp);
-                armor += 7f * m;
-                regen += 0.28f * m;
+                armor = Math.min(GameBalance.MAX_ARMOR, armor + 7f * m);
+                regen = Math.min(GameBalance.MAX_REGEN, regen + 0.28f * m);
                 break;
             case "ART_COMPASS":
                 artifactCompassLevel++;
-                speed *= 1f + 0.065f * m;
-                range *= 1f + 0.085f * m;
-                magnet += 34f * m;
+                speed = Math.min(GameBalance.MAX_SPEED, speed * (1f + 0.065f * m));
+                range = Math.min(GameBalance.MAX_RANGE, range * (1f + 0.085f * m));
+                magnet = Math.min(GameBalance.MAX_MAGNET, magnet + 34f * m);
                 break;
             case "ART_HOURGLASS":
                 artifactHourglassLevel++;
@@ -1108,7 +1246,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                     artifactBloodPactLevel = 1;
                     maxHp += 20f;
                     hp = Math.min(maxHp, hp + 20f);
-                    armor += 5f;
+                    armor = Math.min(GameBalance.MAX_ARMOR, armor + 5f);
                 }
                 break;
             case "ART_BLACK_MIRROR":
@@ -1121,8 +1259,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
             case "ART_VOID_HEART":
                 if (artifactVoidHeartLevel == 0) {
                     artifactVoidHeartLevel = 1;
-                    range *= 1.25f;
-                    magnet += 90f;
+                    range = Math.min(GameBalance.MAX_RANGE, range * 1.25f);
+                    magnet = Math.min(GameBalance.MAX_MAGNET, magnet + 90f);
                     weaponHaste = Math.min(8f, weaponHaste * 1.15f);
                 }
                 break;
@@ -1177,6 +1315,45 @@ public class GameView extends View implements Choreographer.FrameCallback {
     /** Un choix manuel met la partie en pause, contrairement à l'auto-sélection. */
     protected final boolean isChoiceBlockingGameplay() {
         return choosing && !autoChoice;
+    }
+
+    protected final boolean isBreathingPeriod() {
+        return elapsed < breathingUntil || GameBalance.wavePhase(elapsed) == 3;
+    }
+
+    protected final int combatHordeTarget() {
+        int target = GameBalance.hordeTarget(elapsed, level);
+        return isBreathingPeriod() && GameBalance.wavePhase(elapsed) != 3 ? Math.max(5, Math.round(target * 0.4f)) : target;
+    }
+
+    private int combatEnemyCap() {
+        return isBreathingPeriod() ? combatHordeTarget()
+                : GameBalance.enemyCap(elapsed, level, remote.enemyCap, false);
+    }
+
+    protected final int getRunGeneration() { return runGeneration; }
+
+    protected final float globalWeaponHaste() { return weaponHaste * (combatFrenzy ? 1.28f : 1f); }
+
+    protected final void setCombatFrenzy(boolean active) { combatFrenzy = active; }
+
+    protected final int getBossKills() { return bossKills; }
+
+    protected final boolean claimElite(Object candidate) {
+        if (!(candidate instanceof Enemy)) return false;
+        Enemy enemy = (Enemy) candidate;
+        if (enemy.type >= ENEMY_BOSS || enemy.promoted) return false;
+        enemy.promoted = true;
+        return true;
+    }
+
+    protected final int detonatePickup() {
+        ArrayList<Enemy> targets = new ArrayList<>(enemies);
+        for (Enemy enemy : targets) {
+            float amount = enemy.maxHp * (enemy.type >= ENEMY_BOSS ? 0.5f : 2f);
+            damageEnemy(enemy, amount, false);
+        }
+        return targets.size();
     }
 
     @Override
@@ -1237,6 +1414,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
         for (Chest chest : chests) drawChest(c, chest);
         for (Shot s : shots) drawShot(c, s);
         for (Enemy e : enemies) drawEnemy(c, e);
+        drawEnemyWarnings(c);
         drawWeapons(c);
         drawPlayer(c);
         for (Particle p : particles) {
@@ -1396,6 +1574,29 @@ public class GameView extends View implements Choreographer.FrameCallback {
             c.drawRoundRect(e.x - bw / 2f, e.y - e.r - 14f, e.x + bw / 2f, e.y - e.r - 8f, 3f, 3f, paint);
             paint.setColor(Color.rgb(100, 230, 100));
             c.drawRoundRect(e.x - bw / 2f, e.y - e.r - 14f, e.x - bw / 2f + bw * ratio, e.y - e.r - 8f, 3f, 3f, paint);
+        }
+    }
+
+    private void drawEnemyWarnings(Canvas c) {
+        for (Enemy e : enemies) {
+            if (e.warning > 0f) {
+                float radius = e.type == ENEMY_BOSS ? 125f : 94f;
+                float duration = e.type == ENEMY_BOSS ? 1.10f : 0.95f;
+                float progress = 1f - Math.max(0f, e.warning / duration);
+                paint.setColor(Color.argb(45 + (int) (progress * 55f), 255, 126, 56));
+                c.drawCircle(e.aimX, e.aimY, radius, paint);
+                stroke.setStrokeWidth(4f);
+                stroke.setColor(Color.rgb(255, 176, 78));
+                c.drawCircle(e.aimX, e.aimY, radius, stroke);
+                c.drawCircle(e.aimX, e.aimY, Math.max(2f, radius * progress), stroke);
+                c.drawLine(e.aimX - 10f, e.aimY, e.aimX + 10f, e.aimY, stroke);
+                c.drawLine(e.aimX, e.aimY - 10f, e.aimX, e.aimY + 10f, stroke);
+            } else if (e.type == ENEMY_SHOOTER && e.aimLocked && e.shootCd > 0f) {
+                stroke.setColor(Color.argb(170, 255, 194, 90));
+                stroke.setStrokeWidth(2f);
+                c.drawLine(e.x, e.y, e.aimX, e.aimY, stroke);
+                c.drawCircle(e.x, e.y, e.r + 9f, stroke);
+            }
         }
     }
 
@@ -1625,7 +1826,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
         float gap = 8f * scale;
         float cardBottom = h - 24f * scale;
         float cardTop = Math.max(h * 0.58f, cardBottom - 220f * scale);
-        float cardW = (w - margin * 2f - gap * 2f) / 3f;
+        int cardCount = Math.max(1, Math.min(3, currentChoices.size()));
+        float cardW = (w - margin * 2f - gap * (cardCount - 1)) / cardCount;
         for (int i = 0; i < currentChoices.size() && i < 3; i++) {
             Upgrade u = currentChoices.get(i);
             float left = margin + i * (cardW + gap);
@@ -1663,24 +1865,24 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 || code.equals("ART_BLACK_MIRROR") || code.equals("ART_VOID_HEART")) {
             return Color.rgb(255, 65, 145);
         }
-        if (code.startsWith("ART_")) return Color.rgb(205, 115, 255);
         switch (code) {
             case "HP": case "HEAL": case "REGEN": case "ART_WARD":
                 return Color.rgb(75, 220, 130);
-            case "DMG": case "FIRE": case "CRIT": case "MULTI": case "ROCKET":
+            case "DMG": case "FIRE": case "CRIT": case "MULTI": case "ROCKET": case "ARSENAL": case "ART_CROWN":
                 return Color.rgb(245, 105, 85);
             case "ARMOR":
                 return Color.rgb(90, 155, 255);
             case "SPEED": case "MAGNET": case "RANGE": case "ART_COMPASS": case "ART_HOURGLASS":
                 return Color.rgb(75, 205, 235);
-            case "AURA":
+            case "AURA": case "VOID":
                 return Color.rgb(220, 95, 245);
             case "ORBIT":
                 return Color.rgb(100, 225, 205);
             case "LIGHTNING":
                 return Color.rgb(255, 215, 75);
+            case "DRONE": return Color.rgb(94, 218, 255);
             default:
-                return Color.rgb(185, 200, 205);
+                return code.startsWith("ART_") ? Color.rgb(205, 115, 255) : Color.rgb(185, 200, 205);
         }
     }
 
@@ -1698,7 +1900,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 c.drawLine(cx - r, cy, cx + r, cy, stroke);
                 c.drawLine(cx, cy - r, cx, cy + r, stroke);
                 break;
-            case "DMG":
+            case "DMG": case "ARSENAL":
                 c.drawLine(cx - r, cy + r, cx, cy - r, stroke);
                 c.drawLine(cx, cy - r, cx + r, cy + r, stroke);
                 c.drawLine(cx - r * 0.25f, cy + r * 0.25f, cx + r * 0.55f, cy - r * 0.45f, stroke);
@@ -1726,7 +1928,7 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 c.drawCircle(cx, cy, r * 0.55f, stroke);
                 c.drawCircle(cx, cy, r, stroke);
                 break;
-            case "AURA":
+            case "AURA": case "VOID":
                 c.drawCircle(cx, cy, r * 0.42f, paint);
                 c.drawCircle(cx, cy, r, stroke);
                 break;
@@ -1743,6 +1945,11 @@ public class GameView extends View implements Choreographer.FrameCallback {
                 c.drawLine(cx - r * 0.7f, cy + r * 0.65f, cx + r * 0.75f, cy, stroke);
                 c.drawLine(cx + r * 0.75f, cy, cx - r * 0.7f, cy - r * 0.65f, stroke);
                 c.drawLine(cx - r * 0.7f, cy - r * 0.65f, cx - r * 0.7f, cy + r * 0.65f, stroke);
+                break;
+            case "DRONE":
+                c.drawCircle(cx, cy, r * 0.35f, stroke);
+                c.drawLine(cx - r, cy - r * 0.4f, cx + r, cy - r * 0.4f, stroke);
+                c.drawLine(cx - r, cy + r * 0.4f, cx + r, cy + r * 0.4f, stroke);
                 break;
             case "ART_CROWN": case "ART_COMPASS": case "ART_HOURGLASS":
             case "ART_SOUL_REAPER": case "ART_BLOOD_PACT":
@@ -2089,6 +2296,8 @@ public class GameView extends View implements Choreographer.FrameCallback {
     private static final class Enemy {
         final int type;
         float x, y, r, hp, maxHp, speed, damage, shootCd, flash, orbitHitCd;
+        float attackCd, warning, aimX, aimY;
+        boolean aimLocked, promoted;
         Enemy(int type, float x, float y, float r, float hp, float speed, float damage) {
             this.type = type; this.x = x; this.y = y; this.r = r; this.hp = hp; this.maxHp = hp;
             this.speed = speed; this.damage = damage;
@@ -2114,11 +2323,16 @@ public class GameView extends View implements Choreographer.FrameCallback {
         final float x, y;
         final int kind;
         final int objectiveId;
+        final int minimumRarity;
         Chest(float x, float y, int kind, int objectiveId) {
+            this(x, y, kind, objectiveId, 0);
+        }
+        Chest(float x, float y, int kind, int objectiveId, int minimumRarity) {
             this.x = x;
             this.y = y;
             this.kind = kind;
             this.objectiveId = objectiveId;
+            this.minimumRarity = minimumRarity;
         }
     }
 

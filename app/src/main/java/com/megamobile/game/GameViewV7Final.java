@@ -8,14 +8,12 @@ import java.util.Map;
 
 /** Final V0.7 wrapper that resets all director layers cleanly between runs. */
 public class GameViewV7Final extends GameViewV7 {
-    private Field baseElapsed, baseKills;
-    private float lastElapsedSeen;
+    private Field baseKills;
+    private int lastRunGeneration = -1;
 
     public GameViewV7Final(Context context) {
         super(context);
         try {
-            baseElapsed = GameView.class.getDeclaredField("elapsed");
-            baseElapsed.setAccessible(true);
             baseKills = GameView.class.getDeclaredField("kills");
             baseKills.setAccessible(true);
         } catch (Exception ignored) { }
@@ -23,15 +21,11 @@ public class GameViewV7Final extends GameViewV7 {
 
     @Override
     public void doFrame(long frameTimeNanos) {
+        if (lastRunGeneration != getRunGeneration()) {
+            lastRunGeneration = getRunGeneration();
+            resetRunLayers();
+        }
         super.doFrame(frameTimeNanos);
-        float elapsed = readFloat(baseElapsed);
-        if (lastElapsedSeen > 5f && elapsed + 1f < lastElapsedSeen) resetRunLayers();
-        lastElapsedSeen = elapsed;
-    }
-
-    private float readFloat(Field f) {
-        try { return f == null ? 0f : f.getFloat(this); }
-        catch (Exception ignored) { return 0f; }
     }
 
     private int readInt(Field f) {
@@ -49,6 +43,8 @@ public class GameViewV7Final extends GameViewV7 {
         setV7("combo", 0);
         setV7("comboTier", 0);
         setV7("comboTimer", 0f);
+        setV7("elitesWithoutSpecial", 0);
+        setV7("elitesWithoutLoot", 0);
         setV7("directorLabel", "");
         setV7("directorLabelLife", 0f);
         setV7("beacon", null);
