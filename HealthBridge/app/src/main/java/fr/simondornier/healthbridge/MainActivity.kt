@@ -15,8 +15,8 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var statusText: TextView
-    private lateinit var folderText: TextView
-    private val treeStore by lazy { DriveTreeStore(this) }
+    private lateinit var fileText: TextView
+    private val driveStore by lazy { DriveTreeStore(this) }
     private val healthClient by lazy { HealthConnectClient.getOrCreate(this) }
 
     private val permissionLauncher = registerForActivityResult(
@@ -26,14 +26,15 @@ class MainActivity : ComponentActivity() {
         SyncWorker.schedule(this)
     }
 
-    private val folderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+    private val fileLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
-            treeStore.saveTreeUri(
+            driveStore.saveFileUri(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
             SyncWorker.schedule(this)
             SyncWorker.syncNow(this)
+            Toast.makeText(this, "Fichier Drive configuré", Toast.LENGTH_SHORT).show()
             refreshStatus()
         }
     }
@@ -51,7 +52,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContentView(buildUi())
-        if (treeStore.getTreeUri() != null) SyncWorker.schedule(this)
+        if (driveStore.getFileUri() != null) SyncWorker.schedule(this)
         refreshStatus()
     }
 
@@ -86,17 +87,17 @@ class MainActivity : ComponentActivity() {
         }
         content.addView(statusText, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        folderText = TextView(this).apply {
+        fileText = TextView(this).apply {
             textSize = 15f
             setPadding(0, dp(14), 0, dp(10))
         }
-        content.addView(folderText)
+        content.addView(fileText)
 
         content.addView(button("1. Autoriser Santé Connect") {
             permissionLauncher.launch(HealthConfig.requestedPermissions(healthClient))
         })
-        content.addView(button("2. Choisir le dossier Google Drive") {
-            folderLauncher.launch(treeStore.getTreeUri())
+        content.addView(button("2. Créer le fichier dans Google Drive") {
+            fileLauncher.launch("health_live.json")
         })
         content.addView(button("Synchroniser maintenant") {
             SyncWorker.syncNow(this)
@@ -141,12 +142,12 @@ class MainActivity : ComponentActivity() {
 
             statusText.text = buildString {
                 append("Autorisations : $baseGranted/${requested.size}\n")
-                append("Dossier : ${if (treeStore.getTreeUri() != null) "configuré" else "à choisir"}\n")
+                append("Fichier Drive : ${if (driveStore.getFileUri() != null) "configuré" else "à créer"}\n")
                 append("Dernière synchro : ${last ?: "aucune"}\n")
                 if (errCount > 0) append("Lectures avec erreur : $errCount\n")
                 if (!error.isNullOrBlank()) append("Dernière erreur : $error")
             }
-            folderText.text = "Destination : ${treeStore.displayName() ?: "aucun dossier"}"
+            fileText.text = "Destination : ${driveStore.displayName() ?: "aucun fichier"}"
         }
     }
 }
