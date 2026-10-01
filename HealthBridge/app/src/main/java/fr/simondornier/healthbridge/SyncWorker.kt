@@ -8,12 +8,11 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val store = DriveTreeStore(applicationContext)
-        if (store.getTreeUri() == null) return Result.success()
+        if (store.getFileUri() == null) return Result.success()
 
         return try {
             val exported = HealthExporter(applicationContext).exportLive(72)
-            store.writeText("health_live.json", exported.liveJson)
-            store.writeText("health_status.json", exported.statusJson)
+            store.writeText(exported.liveJson)
 
             applicationContext.getSharedPreferences("health_bridge", Context.MODE_PRIVATE)
                 .edit()
