@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (HealthConnectClient.getSdkStatus(this, HealthConnectClient.DEFAULT_PROVIDER_PACKAGE_NAME) != HealthConnectClient.SDK_AVAILABLE) {
+        if (HealthConnectClient.getSdkStatus(this) != HealthConnectClient.SDK_AVAILABLE) {
             setContentView(TextView(this).apply {
                 text = "Santé Connect n'est pas disponible ou doit être mis à jour sur ce téléphone."
                 textSize = 18f
