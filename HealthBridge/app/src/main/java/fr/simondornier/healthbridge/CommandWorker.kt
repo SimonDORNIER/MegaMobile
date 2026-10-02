@@ -9,17 +9,20 @@ import java.util.concurrent.TimeUnit
 class CommandWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val store = DriveTreeStore(applicationContext)
-        if (!store.isConfigured(DriveTreeStore.COMMAND)) return Result.success()
+        if (!store.isConfigured(DriveTreeStore.COMMAND) && !store.isConfigured(DriveTreeStore.LIVE)) return Result.success()
 
         return try {
             val prefs = applicationContext.getSharedPreferences("health_bridge", Context.MODE_PRIVATE)
             val lastHandled = prefs.getString("last_command_id", null)
-            val currentName = store.displayName(DriveTreeStore.COMMAND).orEmpty()
+            val commandName = store.displayName(DriveTreeStore.COMMAND).orEmpty()
+            val liveName = store.displayName(DriveTreeStore.LIVE).orEmpty()
 
             var requestId: String? = null
-            if (currentName.startsWith("health_command_") && currentName != "health_command_ready.json") {
-                requestId = currentName
-            } else {
+            if (commandName.startsWith("health_command_request_")) {
+                requestId = commandName
+            } else if (liveName.startsWith("health_live_request_")) {
+                requestId = liveName
+            } else if (store.isConfigured(DriveTreeStore.COMMAND)) {
                 val raw = store.readText(DriveTreeStore.COMMAND)?.trim().orEmpty()
                 if (raw.isNotBlank()) {
                     val json = runCatching { JSONObject(raw) }.getOrNull()
