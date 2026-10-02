@@ -16,11 +16,11 @@ class PrivacyActivity : Activity() {
 
                 Health Bridge lit uniquement les catégories Santé Connect que vous autorisez.
 
-                Les données restent sur votre téléphone et sont exportées vers le dossier que vous choisissez avec le sélecteur de fichiers Android. L'application n'utilise aucun serveur propriétaire, aucune publicité et aucun compte tiers.
+                Les données sont lues localement depuis Santé Connect puis écrites uniquement dans les fichiers Google Drive que vous choisissez avec le sélecteur Android. L application n utilise aucun serveur Health Bridge, aucune publicité et aucun SDK publicitaire.
 
                 Les exports contiennent les identifiants et la source d'origine Santé Connect afin de permettre la déduplication des mesures provenant de plusieurs applications.
 
-                Vous pouvez révoquer les autorisations Santé Connect à tout moment dans les paramètres Android et retirer l'accès au dossier en supprimant les données de l'application.
+                Le fichier de commande distante ne contient pas de données de santé : il sert uniquement à demander un rafraîchissement. Vous pouvez révoquer les autorisations Santé Connect à tout moment et supprimer les autorisations de fichiers en effaçant les données de l application.
             """.trimIndent()
         }
         setContentView(ScrollView(this).apply { addView(text) })
