@@ -12,18 +12,28 @@ class CommandWorker(appContext: Context, params: WorkerParameters) : CoroutineWo
         if (!store.isConfigured(DriveTreeStore.COMMAND)) return Result.success()
 
         return try {
-            val raw = store.readText(DriveTreeStore.COMMAND)?.trim().orEmpty()
-            if (raw.isBlank()) return Result.success()
-            val cmd = JSONObject(raw)
-            val requestId = cmd.optString("requestId")
-            val action = cmd.optString("action", "sync")
             val prefs = applicationContext.getSharedPreferences("health_bridge", Context.MODE_PRIVATE)
             val lastHandled = prefs.getString("last_command_id", null)
+            val currentName = store.displayName(DriveTreeStore.COMMAND).orEmpty()
 
-            if (requestId.isNotBlank() && requestId != lastHandled && action in setOf("sync", "sync_full", "sync_live")) {
+            var requestId: String? = null
+            if (currentName.startsWith("health_command_") && currentName != "health_command_ready.json") {
+                requestId = currentName
+            } else {
+                val raw = store.readText(DriveTreeStore.COMMAND)?.trim().orEmpty()
+                if (raw.isNotBlank()) {
+                    val json = runCatching { JSONObject(raw) }.getOrNull()
+                    val action = json?.optString("action", "sync") ?: "sync"
+                    val id = json?.optString("requestId").orEmpty()
+                    if (id.isNotBlank() && action in setOf("sync", "sync_live", "sync_full")) requestId = id
+                }
+            }
+
+            if (!requestId.isNullOrBlank() && requestId != lastHandled) {
                 prefs.edit()
                     .putString("last_command_id", requestId)
                     .putString("last_command_seen_at", Instant.now().toString())
+                    .remove("last_command_error")
                     .apply()
                 SyncWorker.syncNow(applicationContext, requestId)
             }
