@@ -15,7 +15,11 @@ class DriveTreeStore(private val context: Context) {
         prefs.edit().putString("uri_$key", uri.toString()).apply()
     }
 
-    fun getUri(key: String): Uri? {\n        val current = prefs.getString("uri_$key", null)\n        val legacy = if (key == LIVE) prefs.getString("file_uri", null) else null\n        return (current ?: legacy)?.let(Uri::parse)\n    }
+    fun getUri(key: String): Uri? {
+        val current = prefs.getString("uri_$key", null)
+        val legacy = if (key == LIVE) prefs.getString("file_uri", null) else null
+        return (current ?: legacy)?.let(Uri::parse)
+    }
 
     fun displayName(key: String): String? {
         val uri = getUri(key) ?: return null
