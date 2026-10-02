@@ -190,7 +190,7 @@ class MainActivity : ComponentActivity() {
             "✅ Notifications autorisées" else "⚠️ Notifications non autorisées"
 
         setupStatus.text = driveText + "\n" + notifText +
-            "\n🔄 Synchro horaire + exports Drive vers 8 h 50, 11 h 50 et 19 h 50."
+            "\n🔄 Synchro horaire + bilans et exports Drive vers 9 h, 12 h et 20 h."
     }
 
     private fun syncNow() {
