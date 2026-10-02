@@ -11,6 +11,7 @@ import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import org.json.JSONArray
@@ -72,7 +73,7 @@ data class HealthSummary(
             put("generatedAt", generatedAt.toString())
             put("date", LocalDate.now().toString())
             put("app", "HealthCoach")
-            put("appVersion", "1.0.0")
+            put("appVersion", "1.0.2")
             put("privacy", "Résumé calculé localement depuis Santé Connect; exporté uniquement vers le dossier choisi par l'utilisateur.")
             put("current", JSONObject().apply {
                 putMaybe(this, "sleepStart", latestSleepStart?.toString())
@@ -166,9 +167,18 @@ class HealthRepository(private val context: Context) {
         } else null
 
         val today = LocalDate.now(zone)
-        val stepsToday = steps.filter { it.startTime.atZone(zone).toLocalDate() == today }.sumOf { it.count }
-        val distanceToday = distances.filter { it.startTime.atZone(zone).toLocalDate() == today }
-            .sumOf { it.distance.inMeters }
+        val todayStart = today.atStartOfDay(zone).toInstant()
+        val todayAggregate = client.aggregate(
+            AggregateRequest(
+                metrics = setOf(
+                    StepsRecord.COUNT_TOTAL,
+                    DistanceRecord.DISTANCE_TOTAL
+                ),
+                timeRangeFilter = TimeRangeFilter.between(todayStart, now)
+            )
+        )
+        val stepsToday = todayAggregate[StepsRecord.COUNT_TOTAL] ?: 0L
+        val distanceToday = todayAggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
 
         val weekStart = now.minus(Duration.ofDays(7))
         val recentExercise = exercises.filter { it.endTime.isAfter(weekStart) }
