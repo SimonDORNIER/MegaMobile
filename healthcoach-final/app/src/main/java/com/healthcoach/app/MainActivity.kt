@@ -257,9 +257,12 @@ class MainActivity : ComponentActivity() {
         root.addView(card("🫁 Respiration",
             formatNumber(s.respiratory, "/min") +
                 "\nRéf. 30 j " + formatNumber(s.baseline30.respiratory, "/min")))
-        root.addView(card("👣 Activité aujourd'hui",
-            s.stepsToday.toString() + " pas • " +
+        root.addView(card("👣 Activité",
+            "Aujourd’hui : " + s.stepsToday + " pas • " +
                 String.format(Locale.FRANCE, "%.2f km", s.distanceTodayMeters / 1000.0) +
+                "\nHier : " + s.stepsYesterday + " pas • " +
+                String.format(Locale.FRANCE, "%.2f km", s.distanceYesterdayMeters / 1000.0) +
+                "\nRéf. 30 j : " + formatNumber(s.baseline30.steps, " pas/j") +
                 "\n7 derniers jours : " + s.exerciseSessions7d + " séance(s), " +
                 s.exerciseMinutes7d + " min"))
         if (s.weightKg != null) root.addView(card("⚖️ Poids", formatNumber(s.weightKg, " kg")))
