@@ -11,8 +11,8 @@ android {
         applicationId = "com.healthcoach.finalapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.0.1"
+        versionCode = 12
+        versionName = "1.0.2"
     }
 
     buildTypes {
