@@ -45,6 +45,8 @@ data class HealthSummary(
     val respiratory: Double?,
     val stepsToday: Long,
     val distanceTodayMeters: Double,
+    val stepsYesterday: Long,
+    val distanceYesterdayMeters: Double,
     val exerciseMinutes7d: Long,
     val exerciseSessions7d: Int,
     val weightKg: Double?,
@@ -73,7 +75,7 @@ data class HealthSummary(
             put("generatedAt", generatedAt.toString())
             put("date", LocalDate.now().toString())
             put("app", "HealthCoach")
-            put("appVersion", "1.0.2")
+            put("appVersion", "1.0.3")
             put("privacy", "Résumé calculé localement depuis Santé Connect; exporté uniquement vers le dossier choisi par l'utilisateur.")
             put("current", JSONObject().apply {
                 putMaybe(this, "sleepStart", latestSleepStart?.toString())
@@ -89,6 +91,8 @@ data class HealthSummary(
                 putMaybe(this, "respiratoryRate", respiratory)
                 put("stepsToday", stepsToday)
                 put("distanceTodayMeters", distanceTodayMeters)
+                put("stepsYesterday", stepsYesterday)
+                put("distanceYesterdayMeters", distanceYesterdayMeters)
                 put("exerciseMinutes7d", exerciseMinutes7d)
                 put("exerciseSessions7d", exerciseSessions7d)
                 putMaybe(this, "weightKg", weightKg)
@@ -180,6 +184,19 @@ class HealthRepository(private val context: Context) {
         val stepsToday = todayAggregate[StepsRecord.COUNT_TOTAL] ?: 0L
         val distanceToday = todayAggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
 
+        val yesterdayStart = today.minusDays(1).atStartOfDay(zone).toInstant()
+        val yesterdayAggregate = client.aggregate(
+            AggregateRequest(
+                metrics = setOf(
+                    StepsRecord.COUNT_TOTAL,
+                    DistanceRecord.DISTANCE_TOTAL
+                ),
+                timeRangeFilter = TimeRangeFilter.between(yesterdayStart, todayStart)
+            )
+        )
+        val stepsYesterday = yesterdayAggregate[StepsRecord.COUNT_TOTAL] ?: 0L
+        val distanceYesterday = yesterdayAggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+
         val weekStart = now.minus(Duration.ofDays(7))
         val recentExercise = exercises.filter { it.endTime.isAfter(weekStart) }
         val exerciseMinutes = recentExercise.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() }
@@ -244,6 +261,8 @@ class HealthRepository(private val context: Context) {
             respiratory = latestResp,
             stepsToday = stepsToday,
             distanceTodayMeters = distanceToday,
+            stepsYesterday = stepsYesterday,
+            distanceYesterdayMeters = distanceYesterday,
             exerciseMinutes7d = exerciseMinutes,
             exerciseSessions7d = recentExercise.size,
             weightKg = weights.lastOrNull()?.weight?.inKilograms,
