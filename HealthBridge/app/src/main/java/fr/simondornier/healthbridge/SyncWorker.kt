@@ -18,11 +18,21 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
 
         return try {
             val exported = HealthExporter(applicationContext).exportLive(72)
-            store.writeText(DriveTreeStore.LIVE, exported.liveJson)
+            val live = JSONObject(exported.liveJson).apply {
+                put("bridge", JSONObject().apply {
+                    put("appVersion", BuildConfig.VERSION_NAME)
+                    put("trigger", trigger)
+                    put("syncedAt", Instant.now().toString())
+                    put("commandPollingMinutes", 15)
+                    put("fixedSchedule", "07:45,08:20,11:00,13:30,16:00,18:30,21:00,23:30")
+                    if (!commandId.isNullOrBlank()) put("lastCommandId", commandId)
+                })
+            }.toString(2)
+            store.writeText(DriveTreeStore.LIVE, live)
 
             if (store.isConfigured(DriveTreeStore.HISTORY)) {
                 val previous = runCatching { store.readText(DriveTreeStore.HISTORY) }.getOrNull()
-                val merged = HistoryManager.merge(previous, exported.liveJson)
+                val merged = HistoryManager.merge(previous, live)
                 store.writeText(DriveTreeStore.HISTORY, merged)
             }
 
