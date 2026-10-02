@@ -8,7 +8,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.healthcoach.finalapp"
+        applicationId = "com.healthcoach.finalapp.v102"
         minSdk = 26
         targetSdk = 36
         versionCode = 12
