@@ -1,37 +1,93 @@
-# Health Bridge
+# Health Bridge 0.3
 
-Application Android gratuite et locale pour synchroniser régulièrement les données de **Santé Connect** vers un dossier choisi avec le sélecteur de fichiers Android. Google Drive fonctionne via son fournisseur de documents Android.
+Application Android locale destinée au suivi santé personnel :
 
-## Objectif
+Fitbit → Santé Connect → Health Bridge → Google Drive → analyses ChatGPT
 
-Fitbit → Santé Connect → Health Bridge → Google Drive → analyse ChatGPT
+Aucun serveur Health Bridge, aucun abonnement externe.
 
-L'application ne possède aucun serveur et n'utilise aucun abonnement externe.
+## Architecture
 
-## Fonctionnement
+Health Bridge utilise quatre fichiers Drive, dont un seul est obligatoire :
 
-- autorisations Santé Connect utiles au suivi santé ;
-- lecture en arrière-plan si Santé Connect la permet ;
-- choix unique d'un dossier Google Drive ;
-- synchronisation WorkManager environ toutes les 30 minutes ;
-- lecture d'une fenêtre glissante de 72 heures ;
-- écriture de health_live.json et health_status.json ;
-- conservation de originPackage, metadata.id et lastModifiedTime pour la déduplication ;
-- bouton de synchronisation immédiate.
+- `health_live.json` : obligatoire, données détaillées des 72 dernières heures.
+- `health_status.json` : état de la dernière synchronisation et diagnostic.
+- `health_history.json` : résumé longitudinal quotidien compact qui s'enrichit avec le temps.
+- `health_command.json` : canal de commande distante facultatif.
 
-## Données exportées
+L'ancien `health_live.json` configuré par une version précédente est conservé automatiquement.
 
-Sommeil et phases, fréquence cardiaque, FC au repos, HRV RMSSD, fréquence respiratoire, SpO₂, pas, distance, calories actives et totales, exercices, dénivelé, étages, poids, masse grasse, VO₂ max et hydratation.
+## Synchronisations
 
-## Première configuration
+Exports prévus à :
 
-1. Installer l'APK.
-2. Ouvrir Health Bridge.
-3. Appuyer sur « Autoriser Santé Connect ».
-4. Accorder les catégories souhaitées et la lecture en arrière-plan.
-5. Choisir le dossier Google Drive qui sera utilisé pour le suivi.
-6. Appuyer une fois sur « Synchroniser maintenant ».
+- 07:45
+- 08:20, juste avant le bilan santé de 08:30
+- 11:00
+- 13:30
+- 16:00
+- 18:30, juste avant le bilan du soir de 19:00
+- 21:00
+- 23:30
+
+Android WorkManager peut retarder un travail de fond de quelques minutes si le téléphone est en veille profonde, hors connexion ou soumis à des restrictions de batterie.
+
+Un bouton permet aussi une synchronisation immédiate.
+
+## Commandes distantes
+
+L'application vérifie environ toutes les 15 minutes si ChatGPT a demandé un rafraîchissement.
+
+Deux méthodes sont comprises :
+
+1. fichier `health_command.json` avec un `requestId` unique ;
+2. mécanisme de secours sans fichier de commande : renommer temporairement le fichier live sous la forme `health_live_request_<identifiant>.json`.
+
+Le dernier identifiant de commande traité est mémorisé pour empêcher les doublons.
+
+Après une commande distante, le bloc `bridge` de `health_live.json` indique le déclencheur, l'heure de synchronisation et le dernier identifiant de commande.
+
+## Historique
+
+`health_history.json` ne duplique pas toutes les mesures seconde par seconde. Il conserve des résumés quotidiens pour les tendances longues : sommeil, FC au repos, HRV, respiration, SpO2, VO2 max, poids, masse grasse, pas, distance, calories, dénivelé, étages, hydratation et séances.
+
+Pour les métriques cumulatives provenant de plusieurs applications, le fichier garde le détail des sources et privilégie Fitbit lorsqu'il est présent afin de limiter les doubles comptages.
+
+L'export quotidien natif `Santé Connect.zip` reste la sauvegarde de référence pour l'historique antérieur à l'installation de Health Bridge et pour les analyses rétrospectives complètes.
+
+## Données détaillées
+
+Health Bridge lit, lorsque les autorisations sont accordées :
+
+- sommeil et phases ;
+- fréquence cardiaque ;
+- fréquence cardiaque au repos ;
+- HRV RMSSD ;
+- fréquence respiratoire ;
+- saturation en oxygène ;
+- pas et distance ;
+- calories actives et totales ;
+- exercices ;
+- dénivelé et étages ;
+- poids et masse grasse ;
+- VO2 max ;
+- hydratation.
+
+Les métadonnées Santé Connect, notamment `originPackage`, `metadata.id` et `lastModifiedTime`, sont conservées dans le fichier live pour faciliter la déduplication.
+
+## Première configuration recommandée
+
+1. Installer ou mettre à jour l'APK.
+2. Autoriser Santé Connect, y compris la lecture en arrière-plan et l'historique lorsqu'elles sont proposées.
+3. Vérifier que `health_live.json` est toujours configuré.
+4. Créer `health_status.json`.
+5. Créer `health_command.json`.
+6. Créer `health_history.json`.
+7. Appuyer sur « Synchroniser maintenant ».
+8. Vérifier dans Drive que les fichiers sont modifiés.
 
 ## Confidentialité
 
-Les données sont lues depuis Santé Connect sur l'appareil puis écrites vers le dossier choisi. Aucun serveur applicatif n'est utilisé.
+Les données sont lues depuis Santé Connect sur le téléphone et écrites uniquement dans les fichiers Drive choisis par l'utilisateur. Health Bridge n'envoie pas les données vers un serveur propriétaire et ne contient ni publicité ni SDK publicitaire.
+
+Les fichiers Drive peuvent ensuite être lus par les intégrations que l'utilisateur a lui-même connectées à ChatGPT.
