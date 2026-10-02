@@ -15,9 +15,9 @@ import java.util.concurrent.TimeUnit
 
 object RoutineScheduler {
     private val slots = listOf(
-        Triple("morning", 8, 50),
-        Triple("midday", 11, 50),
-        Triple("evening", 19, 50)
+        Triple("morning", 9, 0),
+        Triple("midday", 12, 0),
+        Triple("evening", 20, 0)
     )
 
     fun scheduleAll(context: Context) {
@@ -48,8 +48,8 @@ object RoutineScheduler {
 class RoutineSyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val name = inputData.getString("slot_name") ?: "routine"
-        val hour = inputData.getInt("target_hour", 8)
-        val minute = inputData.getInt("target_minute", 50)
+        val hour = inputData.getInt("target_hour", 9)
+        val minute = inputData.getInt("target_minute", 0)
         return try {
             if (HealthConnectClient.getSdkStatus(applicationContext) == HealthConnectClient.SDK_AVAILABLE) {
                 val client = HealthConnectClient.getOrCreate(applicationContext)
@@ -57,6 +57,7 @@ class RoutineSyncWorker(appContext: Context, params: WorkerParameters) : Corouti
                 val summary = repo.load(client)
                 val drive = DriveBridge(applicationContext)
                 if (drive.hasFolder()) drive.writeAll(summary, repo.localHistoryJson())
+                NotificationHelper(applicationContext).routineNotify(name, summary)
             }
             RoutineScheduler.scheduleOne(applicationContext, name, hour, minute)
             Result.success()
