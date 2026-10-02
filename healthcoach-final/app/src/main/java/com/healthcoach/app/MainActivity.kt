@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 DriveBridge(this).saveFolder(uri, label)
                 refreshSetupStatus()
                 scheduleBackgroundSync()
+                RoutineScheduler.scheduleAll(this)
                 syncNow()
             } catch (e: Exception) {
                 setStatus("Impossible de conserver l'accès au dossier : " + (e.message ?: "erreur"))
@@ -123,6 +124,7 @@ class MainActivity : ComponentActivity() {
         }
 
         scheduleBackgroundSync()
+        RoutineScheduler.scheduleAll(this)
     }
 
     override fun onResume() {
@@ -188,7 +190,7 @@ class MainActivity : ComponentActivity() {
             "✅ Notifications autorisées" else "⚠️ Notifications non autorisées"
 
         setupStatus.text = driveText + "\n" + notifText +
-            "\n🔄 Mise à jour en arrière-plan planifiée chaque heure quand Android l'autorise."
+            "\n🔄 Synchro horaire + exports Drive vers 8 h 50, 11 h 50 et 19 h 50."
     }
 
     private fun syncNow() {
