@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.ArrayAdapter
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var root: LinearLayout
     private lateinit var status: TextView
     private lateinit var setupStatus: TextView
+    private lateinit var summaryContainer: LinearLayout
     private var lastSummary: HealthSummary? = null
 
     private val dataPermissions = setOf(
@@ -126,7 +128,7 @@ class MainActivity : ComponentActivity() {
         }
 
         scheduleBackgroundSync()
-        RoutineScheduler.scheduleAll(this)
+        FixedTimeSyncScheduler.apply(this)
     }
 
     override fun onResume() {
@@ -192,17 +194,52 @@ class MainActivity : ComponentActivity() {
         val saved = prefs.getInt("sync_minutes", 60)
         spinner.setSelection(listOf(15,30,60,120,240).indexOf(saved).coerceAtLeast(0))
         syncPanel.addView(spinner)
-        syncPanel.addView(button("Enregistrer la fréquence") {
+
+        syncPanel.addView(text("Heures fixes facultatives", 15f, true, Color.WHITE).apply {
+            setPadding(0, dp(12), 0, dp(4))
+        })
+        val fixedTimes = EditText(this).apply {
+            setSingleLine(true)
+            hint = "08:00, 13:00, 22:00"
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(130, 140, 158))
+            setText(prefs.getString("sync_fixed_times", "") ?: "")
+        }
+        syncPanel.addView(fixedTimes)
+        syncPanel.addView(text(
+            "Ces heures servent uniquement à mettre Drive à jour. Aucun bilan automatique n'est déclenché par l'app.",
+            12.5f,
+            false,
+            Color.rgb(174,184,199)
+        ).apply { setPadding(0, dp(2), 0, dp(8)) })
+
+        syncPanel.addView(button("Enregistrer la planification") {
             val minutes = listOf(15,30,60,120,240)[spinner.selectedItemPosition]
-            prefs.edit().putInt("sync_minutes", minutes).apply()
+            val normalized = FixedTimeSyncScheduler.normalize(fixedTimes.text.toString())
+            fixedTimes.setText(normalized)
+            prefs.edit()
+                .putInt("sync_minutes", minutes)
+                .putString("sync_fixed_times", normalized)
+                .apply()
             scheduleBackgroundSync()
+            FixedTimeSyncScheduler.apply(this)
             refreshSetupStatus()
-            setStatus("Fréquence enregistrée : " + choices[spinner.selectedItemPosition])
+            setStatus(
+                if (normalized.isBlank())
+                    "Planification enregistrée : " + choices[spinner.selectedItemPosition]
+                else
+                    "Planification enregistrée : " + choices[spinner.selectedItemPosition] + " + " + normalized
+            )
         })
         syncPanel.layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) }
         root.addView(syncPanel)
+
+        summaryContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        root.addView(summaryContainer)
 
         refreshSetupStatus()
         setContentView(scroll)
@@ -216,8 +253,11 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
             "✅ Notifications autorisées" else "⚠️ Notifications non autorisées"
 
+        val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
+        val fixed = prefs.getString("sync_fixed_times", "")?.takeIf { it.isNotBlank() }
         setupStatus.text = driveText + "\n" + notifText +
-            "\n🔄 Synchro : " + getSharedPreferences("healthcoach", MODE_PRIVATE).getInt("sync_minutes", 60) + " min."
+            "\n🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
+            (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "")
     }
 
     private fun syncNow() {
@@ -255,7 +295,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun renderSummary(s: HealthSummary) {
-        while (root.childCount > 5) root.removeViewAt(5)
+        summaryContainer.removeAllViews()
 
         val icon = when {
             s.recoveryScore >= 80 -> "🟢"
@@ -263,8 +303,15 @@ class MainActivity : ComponentActivity() {
             else -> "🔴"
         }
 
-        root.addView(card("⚡ " + icon + " Récupération", s.recoveryScore.toString() + "/100 • " + s.recoveryLabel))
-        root.addView(card("🌙 Sommeil",
+        val recoveryBody = if (s.recoveryReliable) {
+            s.recoveryScore.toString() + "/100 • " + s.recoveryLabel
+        } else {
+            s.recoveryScore.toString() + "/100 • À actualiser" +
+                "\nDernière nuit disponible : " + (s.latestSleepDate?.toString() ?: "—")
+        }
+        summaryContainer.addView(card("⚡ " + icon + " Récupération", recoveryBody))
+        summaryContainer.addView(card("🌙 Sommeil",
+            (if (!s.recoveryReliable) "⚠️ Données les plus récentes : " + (s.latestSleepDate?.toString() ?: "date inconnue") + "\n" else "") +
             formatMinutes(s.sleepMinutes) +
                 "\nLéger " + formatMinutes(s.lightMinutes) +
                 " • Profond " + formatMinutes(s.deepMinutes) +
@@ -272,19 +319,19 @@ class MainActivity : ComponentActivity() {
                 "\nMoy. 7 j " + formatMinutes(s.baseline7.sleepMinutes) +
                 " • 30 j " + formatMinutes(s.baseline30.sleepMinutes) +
                 " • 90 j " + formatMinutes(s.baseline90.sleepMinutes)))
-        root.addView(card("❤️ Cœur",
+        summaryContainer.addView(card("❤️ Cœur",
             "FC repos " + formatNumber(s.restingHr, " bpm") +
                 "\nFC moyenne nuit " + formatNumber(s.overnightHr, " bpm") +
                 "\nRéf. 30 j " + formatNumber(s.baseline30.restingHr, " bpm")))
-        root.addView(card("〰️ VFC / HRV",
+        summaryContainer.addView(card("〰️ VFC / HRV",
             formatNumber(s.hrv, " ms") +
                 "\nRéf. 7 j " + formatNumber(s.baseline7.hrv, " ms") +
                 " • 30 j " + formatNumber(s.baseline30.hrv, " ms") +
                 " • 90 j " + formatNumber(s.baseline90.hrv, " ms")))
-        root.addView(card("🫁 Respiration",
+        summaryContainer.addView(card("🫁 Respiration",
             formatNumber(s.respiratory, "/min") +
                 "\nRéf. 30 j " + formatNumber(s.baseline30.respiratory, "/min")))
-        root.addView(card("👣 Activité",
+        summaryContainer.addView(card("👣 Activité",
             "Aujourd’hui : " + s.stepsToday + " pas • " +
                 String.format(Locale.FRANCE, "%.2f km", s.distanceTodayMeters / 1000.0) +
                 "\nHier : " + s.stepsYesterday + " pas • " +
@@ -292,8 +339,8 @@ class MainActivity : ComponentActivity() {
                 "\nRéf. 30 j : " + formatNumber(s.baseline30.steps, " pas/j") +
                 "\n7 derniers jours : " + s.exerciseSessions7d + " séance(s), " +
                 s.exerciseMinutes7d + " min"))
-        if (s.weightKg != null) root.addView(card("⚖️ Poids", formatNumber(s.weightKg, " kg")))
-        root.addView(card("🤖 ChatGPT",
+        if (s.weightKg != null) summaryContainer.addView(card("⚖️ Poids", formatNumber(s.weightKg, " kg")))
+        summaryContainer.addView(card("🤖 ChatGPT",
             if (DriveBridge(this).hasFolder())
                 "Les fichiers d'analyse sont automatiquement mis à jour dans Drive. Dans ChatGPT, tu peux simplement écrire : « Fais mon bilan santé »."
             else
