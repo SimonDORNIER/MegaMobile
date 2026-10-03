@@ -4,54 +4,53 @@ import android.content.Context
 
 data class SyncSnapshot(
     val lastAttemptAt: Long,
-    val lastSuccessAt: Long,
+    val lastHealthSuccessAt: Long,
+    val lastDriveSuccessAt: Long,
     val lastSource: String?,
-    val lastError: String?,
-    val driveUpdated: Boolean
+    val lastError: String?
 )
 
 object SyncState {
     private const val PREFS = "healthcoach"
-    private const val ATTEMPT = "sync_last_attempt_at"
-    private const val SUCCESS = "sync_last_success_at"
-    private const val SOURCE = "sync_last_source"
-    private const val ERROR = "sync_last_error"
-    private const val DRIVE = "sync_last_drive_updated"
 
-    fun attempt(context: Context, source: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putLong(ATTEMPT, System.currentTimeMillis())
-            .putString(SOURCE, source)
+    fun recordAttempt(context: Context, source: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_sync_attempt_at", System.currentTimeMillis())
+            .putString("last_sync_source", source)
             .apply()
     }
 
-    fun success(context: Context, source: String, driveUpdated: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putLong(SUCCESS, System.currentTimeMillis())
-            .putLong(ATTEMPT, System.currentTimeMillis())
-            .putString(SOURCE, source)
-            .remove(ERROR)
-            .putBoolean(DRIVE, driveUpdated)
-            .apply()
+    fun recordSuccess(context: Context, driveWritten: Boolean, source: String) {
+        val now = System.currentTimeMillis()
+        val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_sync_attempt_at", now)
+            .putLong("last_health_sync_at", now)
+            .putString("last_sync_source", source)
+            .remove("last_sync_error")
+
+        if (driveWritten) editor.putLong("last_drive_sync_at", now)
+        editor.apply()
     }
 
-    fun failure(context: Context, source: String, message: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putLong(ATTEMPT, System.currentTimeMillis())
-            .putString(SOURCE, source)
-            .putString(ERROR, message.take(300))
-            .putBoolean(DRIVE, false)
+    fun recordFailure(context: Context, message: String, source: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_sync_attempt_at", System.currentTimeMillis())
+            .putString("last_sync_source", source)
+            .putString("last_sync_error", message.take(300))
             .apply()
     }
 
     fun read(context: Context): SyncSnapshot {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return SyncSnapshot(
-            lastAttemptAt = p.getLong(ATTEMPT, 0L),
-            lastSuccessAt = p.getLong(SUCCESS, 0L),
-            lastSource = p.getString(SOURCE, null),
-            lastError = p.getString(ERROR, null),
-            driveUpdated = p.getBoolean(DRIVE, false)
+            lastAttemptAt = p.getLong("last_sync_attempt_at", 0L),
+            lastHealthSuccessAt = p.getLong("last_health_sync_at", 0L),
+            lastDriveSuccessAt = p.getLong("last_drive_sync_at", 0L),
+            lastSource = p.getString("last_sync_source", null),
+            lastError = p.getString("last_sync_error", null)
         )
     }
 }
