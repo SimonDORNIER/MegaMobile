@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
         }
         setup.addView(setupStatus)
         setup.addView(button("Autorisations Santé Connect") {
-            healthPermissionLauncher.launch(dataPermissions)
+            checkHealthPermissionsFromButton()
         })
         setup.addView(button("Choisir le dossier Google Drive") { folderLauncher.launch(null) })
         setup.layoutParams = LinearLayout.LayoutParams(
@@ -293,6 +293,29 @@ class MainActivity : ComponentActivity() {
             }
 
             render(healthText)
+        }
+    }
+
+    private fun checkHealthPermissionsFromButton() {
+        val hc = client ?: run {
+            setStatus("Santé Connect n'est pas prêt.")
+            return
+        }
+
+        scope.launch {
+            val granted = runCatching {
+                hc.permissionController.getGrantedPermissions()
+            }.getOrDefault(emptySet())
+
+            val missing = dataPermissions.filterNot { it in granted }.toSet()
+
+            if (missing.isEmpty()) {
+                setStatus("Santé Connect : toutes les autorisations sont déjà accordées.")
+                refreshSetupStatus()
+            } else {
+                setStatus("Santé Connect : " + missing.size + " autorisation(s) à accorder.")
+                healthPermissionLauncher.launch(missing)
+            }
         }
     }
 
