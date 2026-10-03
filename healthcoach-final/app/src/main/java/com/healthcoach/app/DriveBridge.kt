@@ -46,13 +46,15 @@ class DriveBridge(private val context: Context) {
         val currentOk = writeJson("healthcoach_current.json", summary.toJson())
         val historyOk = writeJson("healthcoach_history.json", history)
         val status = JSONObject().apply {
-            put("schemaVersion", 1)
+            put("schemaVersion", 2)
             put("generatedAt", summary.generatedAt.toString())
             put("connected", true)
             put("recoveryScore", summary.recoveryScore)
             put("recoveryLabel", summary.recoveryLabel)
+            put("recoveryReliable", summary.recoveryReliable)
+            put("latestSleepDate", summary.latestSleepDate?.toString() ?: JSONObject.NULL)
             put("instructionsForChatGPT",
-                "Pour un bilan, lire healthcoach_current.json en priorité puis healthcoach_history.json pour les tendances. Comparer aux références personnelles et rester concis.")
+                "Pour un bilan, lire healthcoach_current.json en priorité puis healthcoach_history.json. Vérifier dataFreshness/recoveryReliable avant d'interpréter la dernière nuit. Ne jamais présenter une nuit ancienne comme celle d'aujourd'hui.")
         }
         val statusOk = writeJson("healthcoach_status.json", status)
         return currentOk && historyOk && statusOk
