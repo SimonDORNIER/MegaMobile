@@ -8,7 +8,6 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
@@ -23,50 +22,73 @@ object UpdateManager {
     private const val STATUS_FILE = "healthcoach_status.json"
     private const val LEGACY_MANIFEST_FILE = "healthcoach_update.json"
     private var checkRunning = false
-    private var installerOpenedForVersion: Long? = null
+    private var lastInstallerVersion: Long? = null
+    private var lastInstallerAt: Long = 0L
 
+    /**
+     * @return true lorsqu'une version plus récente existe et qu'on traite cette mise à jour.
+     *         Le lancement de la synchro Santé Connect peut ainsi attendre.
+     */
     suspend fun checkOnLaunch(
         activity: Activity,
         onStatus: (String) -> Unit
-    ) {
-        if (checkRunning) return
+    ): Boolean {
+        if (checkRunning) return false
         checkRunning = true
 
         try {
             val drive = DriveBridge(activity)
-            if (!drive.hasFolder()) return
+            if (!drive.hasFolder()) {
+                onStatus("Mise à jour : dossier Drive non configuré.")
+                return false
+            }
 
             onStatus("Vérification des mises à jour…")
             val descriptor = withContext(Dispatchers.IO) {
                 readDescriptor(drive)
             } ?: run {
-                onStatus("Mise à jour : aucune information disponible.")
-                return
+                onStatus("Mise à jour : métadonnées introuvables dans Drive.")
+                return false
             }
 
             val currentVersion = installedVersionCode(activity)
             if (descriptor.versionCode <= currentVersion) {
                 onStatus("HealthCoach " + descriptor.versionName + " est déjà à jour.")
-                return
+                return false
             }
-            if (installerOpenedForVersion == descriptor.versionCode) return
 
-            onStatus("Mise à jour " + descriptor.versionName + " détectée…")
+            onStatus(
+                "Mise à jour " + descriptor.versionName +
+                    " détectée (installée : " + installedVersionName(activity) + ")."
+            )
+
+            val now = System.currentTimeMillis()
+            if (lastInstallerVersion == descriptor.versionCode &&
+                now - lastInstallerAt < 15_000L
+            ) {
+                return true
+            }
 
             val apk = File(
                 File(activity.cacheDir, "updates"),
                 "HealthCoach-" + descriptor.versionName + ".apk"
             )
 
+            onStatus("Téléchargement de HealthCoach " + descriptor.versionName + "…")
             val copied = withContext(Dispatchers.IO) {
                 drive.copyFileTo(descriptor.apkFileName, apk)
             }
 
             if (!copied) {
-                onStatus("Mise à jour trouvée mais APK indisponible dans Drive.")
-                return
+                onStatus(
+                    "Mise à jour " + descriptor.versionName +
+                        " trouvée, mais " + descriptor.apkFileName +
+                        " n'est pas accessible depuis le dossier Drive Android."
+                )
+                return true
             }
 
+            onStatus("Vérification de la signature de la mise à jour…")
             val validation = withContext(Dispatchers.IO) {
                 validateApk(activity, apk, descriptor.versionCode)
             }
@@ -74,39 +96,48 @@ object UpdateManager {
             if (validation != null) {
                 apk.delete()
                 onStatus("Mise à jour refusée : " + validation)
-                return
+                return true
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                 !activity.packageManager.canRequestPackageInstalls()
             ) {
-                onStatus("Autorise HealthCoach à installer ses mises à jour.")
+                onStatus(
+                    "Autorise HealthCoach à installer des applications, puis reviens dans l'app."
+                )
+                lastInstallerVersion = descriptor.versionCode
+                lastInstallerAt = now
                 activity.startActivity(
                     Intent(
                         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + activity.packageName)
                     )
                 )
-                return
+                return true
             }
 
-            installerOpenedForVersion = descriptor.versionCode
             val uri = FileProvider.getUriForFile(
                 activity,
                 activity.packageName + ".fileprovider",
                 apk
             )
 
+            lastInstallerVersion = descriptor.versionCode
+            lastInstallerAt = now
+            onStatus("Ouverture de l'installation HealthCoach " + descriptor.versionName + "…")
             activity.startActivity(
                 Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(uri, "application/vnd.android.package-archive")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             )
+            return true
         } catch (e: Exception) {
-            onStatus("Vérification de mise à jour impossible : " +
-                (e.message ?: e.javaClass.simpleName))
+            onStatus(
+                "Vérification de mise à jour impossible : " +
+                    (e.message ?: e.javaClass.simpleName)
+            )
+            return false
         } finally {
             checkRunning = false
         }
@@ -136,6 +167,9 @@ object UpdateManager {
             info.versionCode.toLong()
         }
     }
+
+    private fun installedVersionName(activity: Activity): String =
+        activity.packageManager.getPackageInfo(activity.packageName, 0).versionName ?: "?"
 
     @Suppress("DEPRECATION")
     private fun validateApk(
@@ -167,7 +201,6 @@ object UpdateManager {
         }
 
         val installed = activity.packageManager.getPackageInfo(activity.packageName, flags)
-
         val installedDigests = signerDigests(installed)
         val archiveDigests = signerDigests(archive)
 
