@@ -46,13 +46,12 @@ class DriveBridge(private val context: Context) {
     }
 
     fun copyFileTo(fileName: String, destination: File): Boolean {
-        val uri = prefs.getString("drive_tree_uri", null)?.let(Uri::parse) ?: return false
-        val tree = DocumentFile.fromTreeUri(context, uri) ?: return false
-        val source = tree.findFile(fileName) ?: return false
+        val cachedKey = "cached_uri_" + fileName
+        val cached = prefs.getString(cachedKey, null)?.let(Uri::parse)
 
-        return try {
+        fun copyFrom(sourceUri: Uri): Boolean = try {
             destination.parentFile?.mkdirs()
-            context.contentResolver.openInputStream(source.uri)?.use { input ->
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
                 destination.outputStream().use { output ->
                     input.copyTo(output)
                 }
@@ -61,6 +60,18 @@ class DriveBridge(private val context: Context) {
         } catch (_: Exception) {
             false
         }
+
+        if (cached != null && copyFrom(cached)) return true
+
+        val treeUri = prefs.getString("drive_tree_uri", null)?.let(Uri::parse) ?: return false
+        val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return false
+
+        val source = tree.listFiles().firstOrNull {
+            it.name.equals(fileName, ignoreCase = true)
+        } ?: tree.findFile(fileName) ?: return false
+
+        prefs.edit().putString(cachedKey, source.uri.toString()).apply()
+        return copyFrom(source.uri)
     }
 
     fun writeJson(fileName: String, json: JSONObject): Boolean {
@@ -80,14 +91,16 @@ class DriveBridge(private val context: Context) {
     fun writeAll(summary: HealthSummary, history: JSONObject): Boolean {
         val currentOk = writeJson("healthcoach_current.json", summary.toJson())
         val historyOk = writeJson("healthcoach_history.json", history)
+        val previousUpdate = readJson("healthcoach_status.json")?.optJSONObject("update")
         val status = JSONObject().apply {
-            put("schemaVersion", 2)
+            put("schemaVersion", 3)
             put("generatedAt", summary.generatedAt.toString())
             put("connected", true)
             put("recoveryScore", summary.recoveryScore)
             put("recoveryLabel", summary.recoveryLabel)
             put("recoveryReliable", summary.recoveryReliable)
             put("latestSleepDate", summary.latestSleepDate?.toString() ?: JSONObject.NULL)
+            if (previousUpdate != null) put("update", previousUpdate)
             put("instructionsForChatGPT",
                 "Pour un bilan, lire healthcoach_current.json en priorité puis healthcoach_history.json. Vérifier dataFreshness/recoveryReliable avant d'interpréter la dernière nuit. Ne jamais présenter une nuit ancienne comme celle d'aujourd'hui.")
         }
