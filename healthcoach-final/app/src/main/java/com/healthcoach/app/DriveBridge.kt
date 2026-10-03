@@ -49,16 +49,19 @@ class DriveBridge(private val context: Context) {
         val cachedKey = "cached_uri_" + fileName
         val cached = prefs.getString(cachedKey, null)?.let(Uri::parse)
 
-        fun copyFrom(sourceUri: Uri): Boolean = try {
-            destination.parentFile?.mkdirs()
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                destination.outputStream().use { output ->
-                    input.copyTo(output)
+        fun copyFrom(sourceUri: Uri): Boolean {
+            return try {
+                destination.parentFile?.mkdirs()
+                val inputStream = context.contentResolver.openInputStream(sourceUri) ?: return false
+                inputStream.use { input ->
+                    destination.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
-            } ?: return false
-            true
-        } catch (_: Exception) {
-            false
+                true
+            } catch (_: Exception) {
+                false
+            }
         }
 
         if (cached != null && copyFrom(cached)) return true
