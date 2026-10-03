@@ -8,26 +8,27 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
 
 data class UpdateDescriptor(
     val versionCode: Long,
     val versionName: String,
-    val apkFileName: String,
+    val apkUrl: String,
     val notes: String
 )
 
 object UpdateManager {
-    private const val STATUS_FILE = "healthcoach_status.json"
-    private const val LEGACY_MANIFEST_FILE = "healthcoach_update.json"
+    private const val MANIFEST_URL =
+        "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/healthcoach/update.json"
+
     private var checkRunning = false
-    private var lastInstallerVersion: Long? = null
-    private var lastInstallerAt: Long = 0L
 
     /**
-     * @return true lorsqu'une version plus récente existe et qu'on traite cette mise à jour.
-     *         Le lancement de la synchro Santé Connect peut ainsi attendre.
+     * @return true lorsqu'une mise à jour plus récente est en cours de traitement.
      */
     suspend fun checkOnLaunch(
         activity: Activity,
@@ -37,23 +38,18 @@ object UpdateManager {
         checkRunning = true
 
         try {
-            val drive = DriveBridge(activity)
-            if (!drive.hasFolder()) {
-                onStatus("Mise à jour : dossier Drive non configuré.")
-                return false
-            }
-
             onStatus("Vérification des mises à jour…")
+
             val descriptor = withContext(Dispatchers.IO) {
-                readDescriptor(drive)
+                fetchDescriptor()
             } ?: run {
-                onStatus("Mise à jour : métadonnées introuvables dans Drive.")
+                onStatus("Mise à jour : impossible de lire le serveur.")
                 return false
             }
 
             val currentVersion = installedVersionCode(activity)
             if (descriptor.versionCode <= currentVersion) {
-                onStatus("HealthCoach " + descriptor.versionName + " est déjà à jour.")
+                onStatus("HealthCoach " + installedVersionName(activity) + " est à jour.")
                 return false
             }
 
@@ -62,33 +58,21 @@ object UpdateManager {
                     " détectée (installée : " + installedVersionName(activity) + ")."
             )
 
-            val now = System.currentTimeMillis()
-            if (lastInstallerVersion == descriptor.versionCode &&
-                now - lastInstallerAt < 15_000L
-            ) {
-                return true
-            }
-
             val apk = File(
                 File(activity.cacheDir, "updates"),
                 "HealthCoach-" + descriptor.versionName + ".apk"
             )
 
-            onStatus("Téléchargement de HealthCoach " + descriptor.versionName + "…")
-            val copied = withContext(Dispatchers.IO) {
-                drive.copyFileTo(descriptor.apkFileName, apk)
+            val downloaded = withContext(Dispatchers.IO) {
+                downloadApk(descriptor.apkUrl, apk)
             }
 
-            if (!copied) {
-                onStatus(
-                    "Mise à jour " + descriptor.versionName +
-                        " trouvée, mais " + descriptor.apkFileName +
-                        " n'est pas accessible depuis le dossier Drive Android."
-                )
+            if (!downloaded) {
+                onStatus("Téléchargement de la mise à jour impossible.")
                 return true
             }
 
-            onStatus("Vérification de la signature de la mise à jour…")
+            onStatus("Vérification de la signature…")
             val validation = withContext(Dispatchers.IO) {
                 validateApk(activity, apk, descriptor.versionCode)
             }
@@ -114,15 +98,13 @@ object UpdateManager {
                 return true
             }
 
+            onStatus("Ouverture de l'installation " + descriptor.versionName + "…")
             val uri = FileProvider.getUriForFile(
                 activity,
                 activity.packageName + ".fileprovider",
                 apk
             )
 
-            lastInstallerVersion = descriptor.versionCode
-            lastInstallerAt = now
-            onStatus("Ouverture de l'installation HealthCoach " + descriptor.versionName + "…")
             activity.startActivity(
                 Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(uri, "application/vnd.android.package-archive")
@@ -132,7 +114,7 @@ object UpdateManager {
             return true
         } catch (e: Exception) {
             onStatus(
-                "Vérification de mise à jour impossible : " +
+                "Mise à jour impossible : " +
                     (e.message ?: e.javaClass.simpleName)
             )
             return false
@@ -141,19 +123,60 @@ object UpdateManager {
         }
     }
 
-    private fun readDescriptor(drive: DriveBridge): UpdateDescriptor? {
-        val status = drive.readJson(STATUS_FILE)
-        val json = status?.optJSONObject("update")
-            ?: drive.readJson(LEGACY_MANIFEST_FILE)
-            ?: return null
+    private fun fetchDescriptor(): UpdateDescriptor? {
+        val connection = (URL(MANIFEST_URL).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            requestMethod = "GET"
+            useCaches = false
+            setRequestProperty("Cache-Control", "no-cache")
+        }
 
-        val versionCode = json.optLong("versionCode", 0L)
-        val versionName = json.optString("versionName", "")
-        val apkFileName = json.optString("apkFileName", "HealthCoach-latest.apk")
-        val notes = json.optString("notes", "")
+        return try {
+            if (connection.responseCode !in 200..299) return null
+            val json = connection.inputStream.bufferedReader(Charsets.UTF_8)
+                .use { JSONObject(it.readText()) }
 
-        if (versionCode <= 0L || versionName.isBlank() || apkFileName.isBlank()) return null
-        return UpdateDescriptor(versionCode, versionName, apkFileName, notes)
+            val versionCode = json.optLong("versionCode", 0L)
+            val versionName = json.optString("versionName", "")
+            val apkUrl = json.optString("apkUrl", "")
+            val notes = json.optString("notes", "")
+
+            if (versionCode <= 0L || versionName.isBlank() || apkUrl.isBlank()) {
+                null
+            } else {
+                UpdateDescriptor(versionCode, versionName, apkUrl, notes)
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun downloadApk(url: String, destination: File): Boolean {
+        destination.parentFile?.mkdirs()
+
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 45_000
+            requestMethod = "GET"
+            instanceFollowRedirects = true
+            useCaches = false
+        }
+
+        return try {
+            if (connection.responseCode !in 200..299) return false
+            connection.inputStream.use { input ->
+                destination.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            destination.length() > 100_000L
+        } catch (_: Exception) {
+            destination.delete()
+            false
+        } finally {
+            connection.disconnect()
+        }
     }
 
     @Suppress("DEPRECATION")
