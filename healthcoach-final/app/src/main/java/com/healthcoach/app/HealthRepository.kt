@@ -32,6 +32,8 @@ data class Baseline(
 
 data class HealthSummary(
     val generatedAt: Instant,
+    val summaryDate: LocalDate,
+    val latestSleepDate: LocalDate?,
     val latestSleepStart: Instant?,
     val latestSleepEnd: Instant?,
     val sleepMinutes: Double?,
@@ -41,8 +43,11 @@ data class HealthSummary(
     val awakeMinutes: Double?,
     val overnightHr: Double?,
     val restingHr: Double?,
+    val restingHrAt: Instant?,
     val hrv: Double?,
+    val hrvAt: Instant?,
     val respiratory: Double?,
+    val respiratoryAt: Instant?,
     val stepsToday: Long,
     val distanceTodayMeters: Double,
     val stepsYesterday: Long,
@@ -55,6 +60,7 @@ data class HealthSummary(
     val baseline90: Baseline,
     val recoveryScore: Int,
     val recoveryLabel: String,
+    val recoveryReliable: Boolean,
     val sleepSource: String?,
     val historyDaysAvailable: Int
 ) {
@@ -71,13 +77,14 @@ data class HealthSummary(
         }
 
         return JSONObject().apply {
-            put("schemaVersion", 2)
+            put("schemaVersion", 3)
             put("generatedAt", generatedAt.toString())
-            put("date", LocalDate.now().toString())
+            put("date", summaryDate.toString())
             put("app", "HealthCoach")
-            put("appVersion", "2.0.0")
+            put("appVersion", "2.0.1")
             put("privacy", "Résumé calculé localement depuis Santé Connect; exporté uniquement vers le dossier choisi par l'utilisateur.")
             put("current", JSONObject().apply {
+                putMaybe(this, "sleepDate", latestSleepDate?.toString())
                 putMaybe(this, "sleepStart", latestSleepStart?.toString())
                 putMaybe(this, "sleepEnd", latestSleepEnd?.toString())
                 putMaybe(this, "sleepMinutes", sleepMinutes)
@@ -87,8 +94,11 @@ data class HealthSummary(
                 putMaybe(this, "awakeMinutes", awakeMinutes)
                 putMaybe(this, "overnightHeartRate", overnightHr)
                 putMaybe(this, "restingHeartRate", restingHr)
+                putMaybe(this, "restingHeartRateAt", restingHrAt?.toString())
                 putMaybe(this, "hrvRmssdMs", hrv)
+                putMaybe(this, "hrvAt", hrvAt?.toString())
                 putMaybe(this, "respiratoryRate", respiratory)
+                putMaybe(this, "respiratoryRateAt", respiratoryAt?.toString())
                 put("stepsToday", stepsToday)
                 put("distanceTodayMeters", distanceTodayMeters)
                 put("stepsYesterday", stepsYesterday)
@@ -98,17 +108,35 @@ data class HealthSummary(
                 putMaybe(this, "weightKg", weightKg)
                 putMaybe(this, "sleepSource", sleepSource)
             })
+            put("dataFreshness", JSONObject().apply {
+                putMaybe(this, "latestSleepDate", latestSleepDate?.toString())
+                put("latestSleepIsCurrent", latestSleepDate == summaryDate)
+                put("recoveryReliable", recoveryReliable)
+                putMaybe(this, "latestSleepEnd", latestSleepEnd?.toString())
+                putMaybe(this, "restingHeartRateAt", restingHrAt?.toString())
+                putMaybe(this, "hrvAt", hrvAt?.toString())
+                putMaybe(this, "respiratoryRateAt", respiratoryAt?.toString())
+                put(
+                    "note",
+                    if (recoveryReliable)
+                        "Les données principales de récupération correspondent à la nuit la plus récente disponible."
+                    else
+                        "La récupération utilise des données plus anciennes ou incomplètes. Ne pas les présenter comme celles de la nuit courante."
+                )
+            })
             put("baseline7d", baselineJson(baseline7))
             put("baseline30d", baselineJson(baseline30))
             put("baseline90d", baselineJson(baseline90))
             put("recovery", JSONObject().apply {
                 put("score", recoveryScore)
                 put("label", recoveryLabel)
+                put("isReliable", recoveryReliable)
+                putMaybe(this, "sourceSleepDate", latestSleepDate?.toString())
                 put("method", "Score local explicable basé principalement sur sommeil, VFC et FC de repos par rapport aux références personnelles.")
             })
             put("historyDaysAvailable", historyDaysAvailable)
             put("chatgpt", JSONObject().apply {
-                put("suggestedRequest", "Analyse mes données HealthCoach. Compare d'abord la dernière nuit et la récupération aux références personnelles 7/30/90 jours, signale uniquement les variations utiles, puis donne 2 à 4 conseils courts pour aujourd'hui.")
+                put("suggestedRequest", "Analyse mes données HealthCoach. Vérifie d'abord dataFreshness et la date réelle de la dernière nuit. Si recovery.isReliable=false, ne présente pas les données anciennes comme celles d'aujourd'hui. Compare ensuite aux références 7/30/90 jours et donne 2 à 4 conseils courts.")
             })
         }
     }
@@ -119,6 +147,7 @@ class HealthRepository(private val context: Context) {
 
     suspend fun load(client: HealthConnectClient): HealthSummary {
         val now = Instant.now()
+        val today = LocalDate.now(zone)
         val ninetyDaysAgo = now.minus(Duration.ofDays(90))
         val thirtyDaysAgo = now.minus(Duration.ofDays(30))
 
@@ -145,6 +174,7 @@ class HealthRepository(private val context: Context) {
             .records.sortedBy { it.time }
 
         val latestSleep = sleeps.lastOrNull()
+        val latestSleepDate = latestSleep?.endTime?.atZone(zone)?.toLocalDate()
         val sleepMinutes = latestSleep?.let { Duration.between(it.startTime, it.endTime).toMinutes().toDouble() }
         var light = 0.0
         var deep = 0.0
@@ -170,7 +200,6 @@ class HealthRepository(private val context: Context) {
             hrs.averageOrNull()
         } else null
 
-        val today = LocalDate.now(zone)
         val todayStart = today.atStartOfDay(zone).toInstant()
         val todayAggregate = client.aggregate(
             AggregateRequest(
@@ -227,9 +256,18 @@ class HealthRepository(private val context: Context) {
         val b7 = baseline(7)
         val b30 = baseline(30)
         val b90 = baseline(90)
-        val latestRhr = rhr.lastOrNull()?.beatsPerMinute?.toDouble()
-        val latestHrv = hrv.lastOrNull()?.heartRateVariabilityMillis
-        val latestResp = resp.lastOrNull()?.rate
+        val latestRhrRecord = rhr.lastOrNull()
+        val latestHrvRecord = hrv.lastOrNull()
+        val latestRespRecord = resp.lastOrNull()
+        val latestRhr = latestRhrRecord?.beatsPerMinute?.toDouble()
+        val latestHrv = latestHrvRecord?.heartRateVariabilityMillis
+        val latestResp = latestRespRecord?.rate
+
+        val recoveryMetricTimes = listOfNotNull(latestRhrRecord?.time, latestHrvRecord?.time)
+        val recoveryReliable =
+            latestSleepDate == today &&
+            recoveryMetricTimes.isNotEmpty() &&
+            recoveryMetricTimes.all { !it.isBefore(now.minus(Duration.ofHours(36))) }
 
         var score = 80.0
         if (sleepMinutes != null && b30.sleepMinutes != null && b30.sleepMinutes > 0)
@@ -240,7 +278,9 @@ class HealthRepository(private val context: Context) {
             score -= (latestRhr - b30.restingHr) * 2.0
 
         val finalScore = score.coerceIn(20.0, 100.0).roundToInt()
-        val label = when {
+        val label = if (!recoveryReliable) {
+            "À actualiser"
+        } else when {
             finalScore >= 80 -> "Bonne"
             finalScore >= 60 -> "Moyenne"
             else -> "Faible"
@@ -248,6 +288,8 @@ class HealthRepository(private val context: Context) {
 
         val summary = HealthSummary(
             generatedAt = now,
+            summaryDate = today,
+            latestSleepDate = latestSleepDate,
             latestSleepStart = latestSleep?.startTime,
             latestSleepEnd = latestSleep?.endTime,
             sleepMinutes = sleepMinutes,
@@ -257,8 +299,11 @@ class HealthRepository(private val context: Context) {
             awakeMinutes = if (latestSleep?.stages?.isNotEmpty() == true) awake else null,
             overnightHr = overnightHr,
             restingHr = latestRhr,
+            restingHrAt = latestRhrRecord?.time,
             hrv = latestHrv,
+            hrvAt = latestHrvRecord?.time,
             respiratory = latestResp,
+            respiratoryAt = latestRespRecord?.time,
             stepsToday = stepsToday,
             distanceTodayMeters = distanceToday,
             stepsYesterday = stepsYesterday,
@@ -271,6 +316,7 @@ class HealthRepository(private val context: Context) {
             baseline90 = b90,
             recoveryScore = finalScore,
             recoveryLabel = label,
+            recoveryReliable = recoveryReliable,
             sleepSource = latestSleep?.metadata?.dataOrigin?.packageName,
             historyDaysAvailable = dailySleep.map { it.first }.distinct().size
         )
@@ -282,7 +328,7 @@ class HealthRepository(private val context: Context) {
         val prefs = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
         val raw = prefs.getString("daily_history", "[]") ?: "[]"
         val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
-        val today = LocalDate.now().toString()
+        val today = summary.summaryDate.toString()
         val out = JSONArray()
         var replaced = false
 
@@ -305,8 +351,10 @@ class HealthRepository(private val context: Context) {
     }
 
     private fun historyItem(s: HealthSummary) = JSONObject().apply {
-        put("date", LocalDate.now().toString())
+        put("date", s.summaryDate.toString())
         put("generatedAt", s.generatedAt.toString())
+        putNullable("sleepDate", s.latestSleepDate?.toString())
+        put("recoveryReliable", s.recoveryReliable)
         putNullable("sleepMinutes", s.sleepMinutes)
         putNullable("restingHeartRate", s.restingHr)
         putNullable("hrvRmssdMs", s.hrv)
