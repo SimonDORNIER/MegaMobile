@@ -1,0 +1,7 @@
+package com.healthcoach.app
+import android.app.*;import android.content.*;import androidx.work.*;import java.time.*;import java.util.concurrent.TimeUnit
+object Scheduler{
+fun apply(c:Context){val p=AppPrefs(c);val wm=WorkManager.getInstance(c);wm.cancelUniqueWork("hc_periodic");if(p.frequencyMinutes>=15){val r=PeriodicWorkRequestBuilder<HealthSyncWorker>(p.frequencyMinutes,TimeUnit.MINUTES).build();wm.enqueueUniquePeriodicWork("hc_periodic",ExistingPeriodicWorkPolicy.UPDATE,r)};fixed(c,p.fixedTimes)}
+fun now(c:Context){WorkManager.getInstance(c).enqueueUniqueWork("hc_now",ExistingWorkPolicy.REPLACE,OneTimeWorkRequestBuilder<HealthSyncWorker>().build())}
+private fun fixed(c:Context,csv:String){val am=c.getSystemService(AlarmManager::class.java);for(i in 0..11){am.cancel(PendingIntent.getBroadcast(c,8000+i,Intent(c,SyncAlarmReceiver::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))}
+csv.split(",").map{it.trim()}.filter{Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(it)}.take(12).forEachIndexed{i,s->val t=LocalTime.parse(s);var z=ZonedDateTime.now().withHour(t.hour).withMinute(t.minute).withSecond(0).withNano(0);if(!z.isAfter(ZonedDateTime.now()))z=z.plusDays(1);val pi=PendingIntent.getBroadcast(c,8000+i,Intent(c,SyncAlarmReceiver::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE);if(am.canScheduleExactAlarms())am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,z.toInstant().toEpochMilli(),pi)else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,z.toInstant().toEpochMilli(),pi)}}}
