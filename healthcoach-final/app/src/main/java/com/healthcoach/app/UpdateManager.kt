@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Base64
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +18,9 @@ import java.security.MessageDigest
 data class UpdateDescriptor(
     val versionCode: Long,
     val versionName: String,
-    val apkUrl: String,
+    val apkUrl: String?,
+    val chunks: List<String>,
+    val sha256: String?,
     val notes: String
 )
 
@@ -27,9 +30,6 @@ object UpdateManager {
 
     private var checkRunning = false
 
-    /**
-     * @return true lorsqu'une mise à jour plus récente est en cours de traitement.
-     */
     suspend fun checkOnLaunch(
         activity: Activity,
         onStatus: (String) -> Unit
@@ -43,7 +43,7 @@ object UpdateManager {
             val descriptor = withContext(Dispatchers.IO) {
                 fetchDescriptor()
             } ?: run {
-                onStatus("Mise à jour : impossible de lire le serveur.")
+                onStatus("Mise à jour : impossible de lire le serveur GitHub.")
                 return false
             }
 
@@ -64,12 +64,27 @@ object UpdateManager {
             )
 
             val downloaded = withContext(Dispatchers.IO) {
-                downloadApk(descriptor.apkUrl, apk)
+                when {
+                    descriptor.chunks.isNotEmpty() ->
+                        downloadChunkedApk(descriptor.chunks, apk)
+                    !descriptor.apkUrl.isNullOrBlank() ->
+                        downloadBinary(descriptor.apkUrl, apk)
+                    else -> false
+                }
             }
 
             if (!downloaded) {
                 onStatus("Téléchargement de la mise à jour impossible.")
                 return true
+            }
+
+            if (!descriptor.sha256.isNullOrBlank()) {
+                val digest = withContext(Dispatchers.IO) { sha256(apk) }
+                if (!digest.equals(descriptor.sha256, ignoreCase = true)) {
+                    apk.delete()
+                    onStatus("Mise à jour refusée : contrôle d'intégrité incorrect.")
+                    return true
+                }
             }
 
             onStatus("Vérification de la signature…")
@@ -124,44 +139,61 @@ object UpdateManager {
     }
 
     private fun fetchDescriptor(): UpdateDescriptor? {
-        val connection = (URL(MANIFEST_URL).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 8_000
-            readTimeout = 8_000
-            requestMethod = "GET"
-            useCaches = false
-            setRequestProperty("Cache-Control", "no-cache")
-        }
+        val json = fetchText(MANIFEST_URL)?.let(::JSONObject) ?: return null
 
-        return try {
-            if (connection.responseCode !in 200..299) return null
-            val json = connection.inputStream.bufferedReader(Charsets.UTF_8)
-                .use { JSONObject(it.readText()) }
+        val versionCode = json.optLong("versionCode", 0L)
+        val versionName = json.optString("versionName", "")
+        val apkUrl = json.optString("apkUrl", "").takeIf { it.isNotBlank() }
+        val sha256 = json.optString("sha256", "").takeIf { it.isNotBlank() }
+        val notes = json.optString("notes", "")
 
-            val versionCode = json.optLong("versionCode", 0L)
-            val versionName = json.optString("versionName", "")
-            val apkUrl = json.optString("apkUrl", "")
-            val notes = json.optString("notes", "")
-
-            if (versionCode <= 0L || versionName.isBlank() || apkUrl.isBlank()) {
-                null
-            } else {
-                UpdateDescriptor(versionCode, versionName, apkUrl, notes)
+        val chunksJson = json.optJSONArray("chunks")
+        val chunks = buildList {
+            if (chunksJson != null) {
+                for (i in 0 until chunksJson.length()) {
+                    chunksJson.optString(i, "").takeIf { it.isNotBlank() }?.let(::add)
+                }
             }
-        } finally {
-            connection.disconnect()
         }
+
+        if (versionCode <= 0L || versionName.isBlank() ||
+            (apkUrl.isNullOrBlank() && chunks.isEmpty())
+        ) return null
+
+        return UpdateDescriptor(
+            versionCode = versionCode,
+            versionName = versionName,
+            apkUrl = apkUrl,
+            chunks = chunks,
+            sha256 = sha256,
+            notes = notes
+        )
     }
 
-    private fun downloadApk(url: String, destination: File): Boolean {
+    private fun downloadChunkedApk(urls: List<String>, destination: File): Boolean {
         destination.parentFile?.mkdirs()
-
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 45_000
-            requestMethod = "GET"
-            instanceFollowRedirects = true
-            useCaches = false
+        destination.outputStream().use { output ->
+            for ((index, url) in urls.withIndex()) {
+                val text = fetchText(url) ?: run {
+                    destination.delete()
+                    return false
+                }
+                val bytes = try {
+                    Base64.decode(text.trim(), Base64.DEFAULT)
+                } catch (_: Exception) {
+                    destination.delete()
+                    return false
+                }
+                output.write(bytes)
+                output.flush()
+            }
         }
+        return destination.length() > 100_000L
+    }
+
+    private fun downloadBinary(url: String, destination: File): Boolean {
+        destination.parentFile?.mkdirs()
+        val connection = connection(url, 15_000, 45_000)
 
         return try {
             if (connection.responseCode !in 200..299) return false
@@ -177,6 +209,45 @@ object UpdateManager {
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun fetchText(url: String): String? {
+        val connection = connection(url, 10_000, 20_000)
+        return try {
+            if (connection.responseCode !in 200..299) return null
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun connection(
+        url: String,
+        connectTimeoutMs: Int,
+        readTimeoutMs: Int
+    ) = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = connectTimeoutMs
+        readTimeout = readTimeoutMs
+        requestMethod = "GET"
+        instanceFollowRedirects = true
+        useCaches = false
+        setRequestProperty("Cache-Control", "no-cache")
+        setRequestProperty("User-Agent", "HealthCoach-Android")
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count <= 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     @Suppress("DEPRECATION")
