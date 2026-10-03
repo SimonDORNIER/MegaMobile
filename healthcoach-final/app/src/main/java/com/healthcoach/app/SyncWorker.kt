@@ -11,33 +11,32 @@ class SyncWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val source = "arrière-plan"
-        SyncState.attempt(applicationContext, source)
+        val source = "background"
+        SyncState.recordAttempt(applicationContext, source)
 
         return try {
             if (HealthConnectClient.getSdkStatus(applicationContext) != HealthConnectClient.SDK_AVAILABLE) {
-                SyncState.failure(applicationContext, source, "Santé Connect indisponible")
+                SyncState.recordFailure(applicationContext, "Santé Connect indisponible", source)
                 return Result.success()
             }
 
             val client = HealthConnectClient.getOrCreate(applicationContext)
             val granted = client.permissionController.getGrantedPermissions()
 
-            val missingRecords = HealthPermissions.records.filterNot { it in granted }
-            if (missingRecords.isNotEmpty()) {
-                SyncState.failure(
+            if (!HealthPermissions.records.all { it in granted }) {
+                SyncState.recordFailure(
                     applicationContext,
-                    source,
-                    "Autorisations Santé Connect manquantes"
+                    "Autorisations Santé Connect de lecture manquantes",
+                    source
                 )
                 return Result.success()
             }
 
             if (HealthPermissions.BACKGROUND !in granted) {
-                SyncState.failure(
+                SyncState.recordFailure(
                     applicationContext,
-                    source,
-                    "Lecture Santé Connect en arrière-plan non autorisée"
+                    "Lecture Santé Connect en arrière-plan non autorisée",
+                    source
                 )
                 return Result.success()
             }
@@ -45,35 +44,34 @@ class SyncWorker(
             val repo = HealthRepository(applicationContext)
             val summary = repo.load(client)
             val drive = DriveBridge(applicationContext)
-
-            val driveUpdated = if (drive.hasFolder()) {
+            val driveWritten = if (drive.hasFolder()) {
                 drive.writeAll(summary, repo.localHistoryJson())
             } else false
 
-            if (drive.hasFolder() && !driveUpdated) {
-                SyncState.failure(
+            if (drive.hasFolder() && !driveWritten) {
+                SyncState.recordFailure(
                     applicationContext,
-                    source,
-                    "Écriture du dossier Drive impossible"
+                    "Écriture Drive impossible",
+                    source
                 )
                 return Result.retry()
             }
 
-            SyncState.success(applicationContext, source, driveUpdated)
+            SyncState.recordSuccess(applicationContext, driveWritten, source)
             NotificationHelper(applicationContext).maybeNotify(summary)
             Result.success()
-        } catch (e: SecurityException) {
-            SyncState.failure(
+        } catch (_: SecurityException) {
+            SyncState.recordFailure(
                 applicationContext,
-                source,
-                "Accès Santé Connect refusé en arrière-plan"
+                "Accès Santé Connect refusé en arrière-plan",
+                source
             )
             Result.success()
         } catch (e: Exception) {
-            SyncState.failure(
+            SyncState.recordFailure(
                 applicationContext,
-                source,
-                e.message ?: e.javaClass.simpleName
+                e.message ?: e.javaClass.simpleName,
+                source
             )
             Result.retry()
         }
