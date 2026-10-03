@@ -75,7 +75,7 @@ data class HealthSummary(
             put("generatedAt", generatedAt.toString())
             put("date", LocalDate.now().toString())
             put("app", "HealthCoach")
-            put("appVersion", "1.0.3")
+            put("appVersion", "2.0.0")
             put("privacy", "Résumé calculé localement depuis Santé Connect; exporté uniquement vers le dossier choisi par l'utilisateur.")
             put("current", JSONObject().apply {
                 putMaybe(this, "sleepStart", latestSleepStart?.toString())
