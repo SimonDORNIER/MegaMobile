@@ -94,7 +94,6 @@ class MainActivity : ComponentActivity() {
                         healthPermissionLauncher.launch(dataPermissions)
                     } else {
                         refreshSetupStatus()
-                        syncNow()
                     }
                 }
             }
@@ -115,9 +114,13 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         refreshSetupStatus()
-        checkForAppUpdate()
-        if (client != null && BackgroundSyncScheduler.shouldCatchUp(this)) {
-            syncNow()
+        scope.launch {
+            val updating = UpdateManager.checkOnLaunch(this@MainActivity) { message ->
+                setStatus(message)
+            }
+            if (!updating && client != null && BackgroundSyncScheduler.shouldCatchUp(this@MainActivity)) {
+                syncNow()
+            }
         }
     }
 
@@ -144,7 +147,7 @@ class MainActivity : ComponentActivity() {
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
             setPadding(0, dp(2), 0, dp(4))
         })
-        root.addView(text("v2.0.5 • test mise à jour automatique", 12.5f, false, Color.rgb(138,180,248)).apply {
+        root.addView(text("v2.0.6 • système de mise à jour renforcé", 12.5f, false, Color.rgb(138,180,248)).apply {
             setPadding(0, 0, 0, dp(10))
         })
 
@@ -163,6 +166,9 @@ class MainActivity : ComponentActivity() {
         setup.addView(setupStatus)
         setup.addView(button("Autorisations Santé Connect") {
             checkHealthPermissionsFromButton()
+        })
+        setup.addView(button("Vérifier la mise à jour") {
+            checkForAppUpdate()
         })
         setup.addView(button("Choisir le dossier Google Drive") { folderLauncher.launch(null) })
         setup.layoutParams = LinearLayout.LayoutParams(
