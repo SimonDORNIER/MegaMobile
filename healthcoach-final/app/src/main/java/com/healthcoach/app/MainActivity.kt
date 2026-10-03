@@ -12,6 +12,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.Spinner
+import android.widget.ArrayAdapter
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -84,7 +86,7 @@ class MainActivity : ComponentActivity() {
                 DriveBridge(this).saveFolder(uri, label)
                 refreshSetupStatus()
                 scheduleBackgroundSync()
-                RoutineScheduler.scheduleAll(this)
+        
                 syncNow()
             } catch (e: Exception) {
                 setStatus("Impossible de conserver l'accès au dossier : " + (e.message ?: "erreur"))
@@ -177,6 +179,31 @@ class MainActivity : ComponentActivity() {
             LinearLayout.LayoutParams(0, dp(52), 1f).apply { marginStart = dp(6) })
         root.addView(actions)
 
+        val syncPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            background = panelDrawable(Color.rgb(27,31,41))
+        }
+        syncPanel.addView(text("Fréquence de synchronisation", 18f, true, Color.WHITE))
+        val choices = listOf("15 min", "30 min", "1 h", "2 h", "4 h")
+        val spinner = Spinner(this)
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, choices)
+        val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
+        val saved = prefs.getInt("sync_minutes", 60)
+        spinner.setSelection(listOf(15,30,60,120,240).indexOf(saved).coerceAtLeast(0))
+        syncPanel.addView(spinner)
+        syncPanel.addView(button("Enregistrer la fréquence") {
+            val minutes = listOf(15,30,60,120,240)[spinner.selectedItemPosition]
+            prefs.edit().putInt("sync_minutes", minutes).apply()
+            scheduleBackgroundSync()
+            refreshSetupStatus()
+            setStatus("Fréquence enregistrée : " + choices[spinner.selectedItemPosition])
+        })
+        syncPanel.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(10) }
+        root.addView(syncPanel)
+
         refreshSetupStatus()
         setContentView(scroll)
     }
@@ -190,7 +217,7 @@ class MainActivity : ComponentActivity() {
             "✅ Notifications autorisées" else "⚠️ Notifications non autorisées"
 
         setupStatus.text = driveText + "\n" + notifText +
-            "\n🔄 Synchro horaire + bilans et exports Drive vers 9 h, 12 h et 20 h."
+            "\n🔄 Synchro : " + getSharedPreferences("healthcoach", MODE_PRIVATE).getInt("sync_minutes", 60) + " min."
     }
 
     private fun syncNow() {
@@ -288,7 +315,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scheduleBackgroundSync() {
-        val request = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
+        val minutes = getSharedPreferences("healthcoach", MODE_PRIVATE).getInt("sync_minutes", 60).coerceAtLeast(15)
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(minutes.toLong(), TimeUnit.MINUTES)
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
