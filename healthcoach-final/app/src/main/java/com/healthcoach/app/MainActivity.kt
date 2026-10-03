@@ -115,8 +115,17 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         refreshSetupStatus()
+        checkForAppUpdate()
         if (client != null && BackgroundSyncScheduler.shouldCatchUp(this)) {
             syncNow()
+        }
+    }
+
+    private fun checkForAppUpdate() {
+        scope.launch {
+            UpdateManager.checkOnLaunch(this@MainActivity) { message ->
+                setStatus(message)
+            }
         }
     }
 
