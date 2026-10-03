@@ -173,7 +173,14 @@ class HealthRepository(private val context: Context) {
         val weights = client.readRecords(ReadRecordsRequest(WeightRecord::class, range))
             .records.sortedBy { it.time }
 
-        val latestSleep = sleeps.lastOrNull()
+        // Santé Connect peut contenir plusieurs sessions le même jour (sieste ou doublon).
+        // Pour la récupération et les références, on conserve la session principale la plus longue.
+        val primarySleepByDate = sleeps
+            .groupBy { it.endTime.atZone(zone).toLocalDate() }
+            .mapValues { (_, records) ->
+                records.maxByOrNull { Duration.between(it.startTime, it.endTime).toMinutes() }!!
+            }
+        val latestSleep = primarySleepByDate.values.maxByOrNull { it.endTime }
         val latestSleepDate = latestSleep?.endTime?.atZone(zone)?.toLocalDate()
         val sleepMinutes = latestSleep?.let { Duration.between(it.startTime, it.endTime).toMinutes().toDouble() }
         var light = 0.0
@@ -230,10 +237,8 @@ class HealthRepository(private val context: Context) {
         val recentExercise = exercises.filter { it.endTime.isAfter(weekStart) }
         val exerciseMinutes = recentExercise.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() }
 
-        val dailySleep = sleeps.mapNotNull { s ->
-            val date = s.endTime.atZone(zone).toLocalDate()
-            val minutes = Duration.between(s.startTime, s.endTime).toMinutes().toDouble()
-            date to minutes
+        val dailySleep = primarySleepByDate.map { (date, s) ->
+            date to Duration.between(s.startTime, s.endTime).toMinutes().toDouble()
         }
 
         val dailyRhr = rhr.map { it.time.atZone(zone).toLocalDate() to it.beatsPerMinute.toDouble() }
