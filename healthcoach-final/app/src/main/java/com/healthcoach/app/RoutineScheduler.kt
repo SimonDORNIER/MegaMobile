@@ -2,11 +2,9 @@ package com.healthcoach.app
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -65,11 +63,6 @@ object FixedTimeSyncScheduler {
         val request = OneTimeWorkRequestBuilder<FixedTimeSyncWorker>()
             .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
             .setInputData(input)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
             .build()
 
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -129,11 +122,21 @@ class FixedTimeSyncWorker(
             }
             Result.success()
         } catch (_: SecurityException) {
+            SyncState.recordFailure(
+                applicationContext,
+                "Accès Santé Connect refusé pour la synchro à heure fixe",
+                "fixed-time"
+            )
             if (FixedTimeSyncScheduler.isConfigured(applicationContext, hour, minute)) {
                 FixedTimeSyncScheduler.scheduleOne(applicationContext, LocalTime.of(hour, minute))
             }
             Result.success()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            SyncState.recordFailure(
+                applicationContext,
+                e.message ?: e.javaClass.simpleName,
+                "fixed-time"
+            )
             Result.retry()
         }
     }
