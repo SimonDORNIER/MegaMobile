@@ -105,8 +105,6 @@ object UpdateManager {
                 onStatus(
                     "Autorise HealthCoach à installer des applications, puis reviens dans l'app."
                 )
-                lastInstallerVersion = descriptor.versionCode
-                lastInstallerAt = now
                 activity.startActivity(
                     Intent(
                         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
