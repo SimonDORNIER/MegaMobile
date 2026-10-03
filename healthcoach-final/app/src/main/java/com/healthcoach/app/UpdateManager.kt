@@ -20,7 +20,8 @@ data class UpdateDescriptor(
 )
 
 object UpdateManager {
-    private const val MANIFEST_FILE = "healthcoach_update.json"
+    private const val STATUS_FILE = "healthcoach_status.json"
+    private const val LEGACY_MANIFEST_FILE = "healthcoach_update.json"
     private var checkRunning = false
     private var installerOpenedForVersion: Long? = null
 
@@ -35,12 +36,19 @@ object UpdateManager {
             val drive = DriveBridge(activity)
             if (!drive.hasFolder()) return
 
+            onStatus("Vérification des mises à jour…")
             val descriptor = withContext(Dispatchers.IO) {
                 readDescriptor(drive)
-            } ?: return
+            } ?: run {
+                onStatus("Mise à jour : aucune information disponible.")
+                return
+            }
 
             val currentVersion = installedVersionCode(activity)
-            if (descriptor.versionCode <= currentVersion) return
+            if (descriptor.versionCode <= currentVersion) {
+                onStatus("HealthCoach " + descriptor.versionName + " est déjà à jour.")
+                return
+            }
             if (installerOpenedForVersion == descriptor.versionCode) return
 
             onStatus("Mise à jour " + descriptor.versionName + " détectée…")
@@ -105,7 +113,11 @@ object UpdateManager {
     }
 
     private fun readDescriptor(drive: DriveBridge): UpdateDescriptor? {
-        val json = drive.readJson(MANIFEST_FILE) ?: return null
+        val status = drive.readJson(STATUS_FILE)
+        val json = status?.optJSONObject("update")
+            ?: drive.readJson(LEGACY_MANIFEST_FILE)
+            ?: return null
+
         val versionCode = json.optLong("versionCode", 0L)
         val versionName = json.optString("versionName", "")
         val apkFileName = json.optString("apkFileName", "HealthCoach-latest.apk")
