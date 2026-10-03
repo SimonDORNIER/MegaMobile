@@ -1,0 +1,40 @@
+name: HealthCoach Final APK
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'healthcoach-final/**'
+      - '.github/workflows/healthcoach-final-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Build unsigned release APK
+        working-directory: healthcoach-final
+        run: gradle :app:assembleRelease --stacktrace
+      - name: Collect Android signing tool
+        run: |
+          mkdir -p signing-tool/lib
+          BT_DIR="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          cp "$BT_DIR/apksigner" signing-tool/apksigner
+          cp "$BT_DIR/lib/apksigner.jar" signing-tool/lib/apksigner.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HealthCoach-unsigned
+          path: healthcoach-final/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Android-apksigner
+          path: signing-tool
+          if-no-files-found: error
