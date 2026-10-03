@@ -63,10 +63,9 @@ object BackgroundSyncScheduler {
         alarmManager.cancel(pending)
 
         val delayMs = TimeUnit.MINUTES.toMillis(minutes.toLong())
-        val elapsedTrigger = SystemClock.elapsedRealtime() + delayMs
         alarmManager.setAndAllowWhileIdle(
             AlarmManager.ELAPSED_REALTIME_WAKEUP,
-            elapsedTrigger,
+            SystemClock.elapsedRealtime() + delayMs,
             pending
         )
 
@@ -77,8 +76,7 @@ object BackgroundSyncScheduler {
     }
 
     fun shouldCatchUp(context: Context): Boolean {
-        val prefs = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-        val lastDrive = prefs.getLong("last_drive_sync_at", 0L)
+        val lastDrive = SyncState.read(context).lastDriveSuccessAt
         if (lastDrive <= 0L) return true
 
         val intervalMs = TimeUnit.MINUTES.toMillis(intervalMinutes(context).toLong())
