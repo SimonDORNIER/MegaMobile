@@ -50,19 +50,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var summaryContainer: LinearLayout
     private var lastSummary: HealthSummary? = null
 
-    private val dataPermissions = setOf(
-        HealthPermission.getReadPermission(SleepSessionRecord::class),
-        HealthPermission.getReadPermission(HeartRateRecord::class),
-        HealthPermission.getReadPermission(RestingHeartRateRecord::class),
-        HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
-        HealthPermission.getReadPermission(RespiratoryRateRecord::class),
-        HealthPermission.getReadPermission(StepsRecord::class),
-        HealthPermission.getReadPermission(DistanceRecord::class),
-        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-        HealthPermission.getReadPermission(WeightRecord::class),
-        "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
-        "android.permission.health.READ_HEALTH_DATA_HISTORY"
-    )
+    private val dataPermissions = HealthPermissions.all
 
     private val healthPermissionLauncher = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -161,6 +149,9 @@ class MainActivity : ComponentActivity() {
             setPadding(0, dp(8), 0, dp(8))
         }
         setup.addView(setupStatus)
+        setup.addView(button("Autorisations Santé Connect") {
+            healthPermissionLauncher.launch(dataPermissions)
+        })
         setup.addView(button("Choisir le dossier Google Drive") { folderLauncher.launch(null) })
         setup.layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -243,28 +234,71 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshSetupStatus() {
         if (!::setupStatus.isInitialized) return
+
         val drive = DriveBridge(this)
-        val driveText = if (drive.hasFolder()) "✅ Drive : " + drive.folderLabel() else "⚠️ Drive : dossier à choisir"
-        val notifText = if (Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
-            "✅ Notifications autorisées" else "⚠️ Notifications non autorisées"
+        val driveText = if (drive.hasFolder()) {
+            "✅ Drive : " + drive.folderLabel()
+        } else {
+            "⚠️ Drive : dossier à choisir"
+        }
+
+        val notifText = if (
+            Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            "✅ Notifications autorisées"
+        } else {
+            "⚠️ Notifications non autorisées"
+        }
 
         val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
         val fixed = prefs.getString("sync_fixed_times", "")?.takeIf { it.isNotBlank() }
-        val lastDrive = prefs.getLong("last_drive_sync_at", 0L)
+        val state = SyncState.read(this)
         val nextAlarm = prefs.getLong("next_interval_alarm_at", 0L)
-        val lastError = prefs.getString("last_sync_error", null)
 
-        setupStatus.text = driveText + "\n" + notifText +
-            "\n🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
-            (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
-            "\n✅ Dernière synchro Drive : " + formatClock(lastDrive) +
-            "\n⏱️ Prochaine relance : ~" + formatClock(nextAlarm) +
-            (lastError?.let { "\n⚠️ Dernière erreur : " + it } ?: "")
+        fun render(healthText: String) {
+            setupStatus.text = healthText + "\n" +
+                driveText + "\n" +
+                notifText + "\n" +
+                "🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
+                (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
+                "\n✅ Dernière synchro Drive : " + formatClock(state.lastDriveSuccessAt) +
+                "\n🔎 Dernière tentative : " + formatClock(state.lastAttemptAt) +
+                (state.lastSource?.let { " (" + it + ")" } ?: "") +
+                "\n⏱️ Prochaine relance : ~" + formatClock(nextAlarm) +
+                (state.lastError?.let { "\n⚠️ Dernière erreur : " + it } ?: "")
+        }
+
+        val hc = client
+        if (hc == null) {
+            render("⏳ Santé Connect : vérification…")
+            return
+        }
+
+        scope.launch {
+            val granted = runCatching {
+                hc.permissionController.getGrantedPermissions()
+            }.getOrDefault(emptySet())
+
+            val healthText = when {
+                !HealthPermissions.records.all { it in granted } ->
+                    "⚠️ Santé Connect : autorisations de lecture manquantes"
+                HealthPermissions.BACKGROUND !in granted ->
+                    "⚠️ Santé Connect : arrière-plan non autorisé"
+                else ->
+                    "✅ Santé Connect : arrière-plan autorisé"
+            }
+
+            render(healthText)
+        }
     }
 
     private fun syncNow() {
         val hc = client ?: return
+        SyncState.recordAttempt(this, "foreground")
         setStatus("Synchronisation Santé Connect…")
         scope.launch {
             try {
