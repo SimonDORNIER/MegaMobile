@@ -92,30 +92,6 @@ object BackgroundSyncScheduler {
             .coerceIn(15, 240)
 }
 
-object SyncState {
-    fun recordSuccess(context: Context, driveWritten: Boolean, source: String) {
-        val now = System.currentTimeMillis()
-        val editor = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("last_sync_attempt_at", now)
-            .putLong("last_health_sync_at", now)
-            .putString("last_sync_source", source)
-            .remove("last_sync_error")
-
-        if (driveWritten) editor.putLong("last_drive_sync_at", now)
-        editor.apply()
-    }
-
-    fun recordFailure(context: Context, message: String, source: String) {
-        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("last_sync_attempt_at", System.currentTimeMillis())
-            .putString("last_sync_source", source)
-            .putString("last_sync_error", message.take(300))
-            .apply()
-    }
-}
-
 class IntervalSyncReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         BackgroundSyncScheduler.enqueueImmediate(context)
