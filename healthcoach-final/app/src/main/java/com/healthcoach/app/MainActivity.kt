@@ -32,20 +32,13 @@ import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -134,6 +127,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         refreshSetupStatus()
+        if (client != null && BackgroundSyncScheduler.shouldCatchUp(this)) {
+            syncNow()
+        }
     }
 
     private fun buildUi() {
@@ -255,9 +251,16 @@ class MainActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
         val fixed = prefs.getString("sync_fixed_times", "")?.takeIf { it.isNotBlank() }
+        val lastDrive = prefs.getLong("last_drive_sync_at", 0L)
+        val nextAlarm = prefs.getLong("next_interval_alarm_at", 0L)
+        val lastError = prefs.getString("last_sync_error", null)
+
         setupStatus.text = driveText + "\n" + notifText +
             "\n🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
-            (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "")
+            (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
+            "\n✅ Dernière synchro Drive : " + formatClock(lastDrive) +
+            "\n⏱️ Prochaine relance : ~" + formatClock(nextAlarm) +
+            (lastError?.let { "\n⚠️ Dernière erreur : " + it } ?: "")
     }
 
     private fun syncNow() {
@@ -278,6 +281,22 @@ class MainActivity : ComponentActivity() {
 
                 renderSummary(summary)
 
+                if (drive.hasFolder() && !driveOk) {
+                    SyncState.recordFailure(
+                        this@MainActivity,
+                        "Écriture Drive impossible",
+                        "foreground"
+                    )
+                } else {
+                    SyncState.recordSuccess(
+                        this@MainActivity,
+                        driveWritten = driveOk,
+                        source = "foreground"
+                    )
+                }
+                BackgroundSyncScheduler.scheduleNextAlarm(this@MainActivity)
+                refreshSetupStatus()
+
                 val t = DateTimeFormatter.ofPattern("HH:mm", Locale.FRANCE)
                     .format(java.time.ZonedDateTime.now())
                 setStatus(
@@ -287,8 +306,20 @@ class MainActivity : ComponentActivity() {
                 )
                 NotificationHelper(this@MainActivity).maybeNotify(summary)
             } catch (e: SecurityException) {
+                SyncState.recordFailure(
+                    this@MainActivity,
+                    "Autorisation Santé Connect manquante",
+                    "foreground"
+                )
+                refreshSetupStatus()
                 setStatus("Il manque une autorisation Santé Connect.")
             } catch (e: Exception) {
+                SyncState.recordFailure(
+                    this@MainActivity,
+                    e.message ?: e.javaClass.simpleName,
+                    "foreground"
+                )
+                refreshSetupStatus()
                 setStatus("Erreur de synchronisation : " + (e.message ?: e.javaClass.simpleName))
             }
         }
@@ -362,20 +393,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scheduleBackgroundSync() {
-        val minutes = getSharedPreferences("healthcoach", MODE_PRIVATE).getInt("sync_minutes", 60).coerceAtLeast(15)
-        val request = PeriodicWorkRequestBuilder<SyncWorker>(minutes.toLong(), TimeUnit.MINUTES)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
-            .build()
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "healthcoach_background_sync",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            request
-        )
+        BackgroundSyncScheduler.apply(this)
     }
 
     private fun card(title: String, body: String): View {
@@ -433,6 +451,15 @@ class MainActivity : ComponentActivity() {
     private fun formatNumber(value: Double?, suffix: String): String =
         if (value == null || value.isNaN()) "—"
         else String.format(Locale.FRANCE, "%.1f%s", value, suffix)
+
+    private fun formatClock(timestamp: Long): String {
+        if (timestamp <= 0L) return "jamais"
+        return DateTimeFormatter.ofPattern("HH:mm", Locale.FRANCE)
+            .format(
+                java.time.Instant.ofEpochMilli(timestamp)
+                    .atZone(java.time.ZoneId.systemDefault())
+            )
+    }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).roundToInt()
 }
