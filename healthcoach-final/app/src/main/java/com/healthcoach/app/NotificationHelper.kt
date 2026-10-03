@@ -36,7 +36,7 @@ class NotificationHelper(private val context: Context) {
     }
 
     fun maybeNotify(summary: HealthSummary) {
-        if (!allowed()) return
+        if (!allowed() || !summary.recoveryReliable) return
         val sleepKey = summary.latestSleepEnd?.toString() ?: return
         val last = prefs.getString("last_notified_sleep", null)
         if (sleepKey == last) return
