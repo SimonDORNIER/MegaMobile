@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import org.json.JSONObject
+import java.io.File
 
 class DriveBridge(private val context: Context) {
     private val prefs = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
@@ -26,6 +27,40 @@ class DriveBridge(private val context: Context) {
 
     fun clearFolder() {
         prefs.edit().remove("drive_tree_uri").remove("drive_folder_label").apply()
+    }
+
+    fun readJson(fileName: String): JSONObject? {
+        val uri = prefs.getString("drive_tree_uri", null)?.let(Uri::parse) ?: return null
+        val tree = DocumentFile.fromTreeUri(context, uri) ?: return null
+        val file = tree.findFile(fileName) ?: return null
+
+        return try {
+            val text = context.contentResolver.openInputStream(file.uri)
+                ?.bufferedReader(Charsets.UTF_8)
+                ?.use { it.readText() }
+                ?: return null
+            JSONObject(text)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun copyFileTo(fileName: String, destination: File): Boolean {
+        val uri = prefs.getString("drive_tree_uri", null)?.let(Uri::parse) ?: return false
+        val tree = DocumentFile.fromTreeUri(context, uri) ?: return false
+        val source = tree.findFile(fileName) ?: return false
+
+        return try {
+            destination.parentFile?.mkdirs()
+            context.contentResolver.openInputStream(source.uri)?.use { input ->
+                destination.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return false
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun writeJson(fileName: String, json: JSONObject): Boolean {
