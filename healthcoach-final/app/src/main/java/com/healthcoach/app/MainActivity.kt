@@ -142,7 +142,10 @@ class MainActivity : ComponentActivity() {
 
         root.addView(text("HealthCoach", 30f, true, Color.WHITE))
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
-            setPadding(0, dp(2), 0, dp(14))
+            setPadding(0, dp(2), 0, dp(4))
+        })
+        root.addView(text("v2.0.5 • test mise à jour automatique", 12.5f, false, Color.rgb(138,180,248)).apply {
+            setPadding(0, 0, 0, dp(10))
         })
 
         status = text("Initialisation…", 14f, false, Color.rgb(138,180,248))
