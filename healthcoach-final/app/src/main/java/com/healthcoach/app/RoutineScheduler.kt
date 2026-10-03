@@ -113,7 +113,15 @@ class FixedTimeSyncWorker(
                 val repo = HealthRepository(applicationContext)
                 val summary = repo.load(client)
                 val drive = DriveBridge(applicationContext)
-                if (drive.hasFolder()) drive.writeAll(summary, repo.localHistoryJson())
+                val driveWritten = if (drive.hasFolder()) {
+                    drive.writeAll(summary, repo.localHistoryJson())
+                } else false
+
+                if (drive.hasFolder() && !driveWritten) {
+                    SyncState.recordFailure(applicationContext, "Écriture Drive impossible", "fixed-time")
+                } else {
+                    SyncState.recordSuccess(applicationContext, driveWritten, "fixed-time")
+                }
             }
 
             if (FixedTimeSyncScheduler.isConfigured(applicationContext, hour, minute)) {
