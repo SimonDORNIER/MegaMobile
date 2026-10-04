@@ -15,7 +15,7 @@ object HealthSyncRunner {
             .putLong("last_worker_started_at", System.currentTimeMillis())
             .apply()
 
-        return try {
+        try {
             if (HealthConnectClient.getSdkStatus(context) != HealthConnectClient.SDK_AVAILABLE) {
                 SyncState.recordFailure(context, "Santé Connect indisponible", source)
                 recordEnd(context, "health_connect_unavailable")
