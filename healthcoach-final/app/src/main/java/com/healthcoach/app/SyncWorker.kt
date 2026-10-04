@@ -1,7 +1,6 @@
 package com.healthcoach.app
 
 import android.content.Context
-import androidx.health.connect.client.HealthConnectClient
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 
@@ -11,89 +10,8 @@ class SyncWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val source = "background"
-        applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("last_worker_started_at", System.currentTimeMillis())
-            .apply()
-        SyncState.recordAttempt(applicationContext, source)
-
-        return try {
-            if (HealthConnectClient.getSdkStatus(applicationContext) != HealthConnectClient.SDK_AVAILABLE) {
-                SyncState.recordFailure(applicationContext, "Santé Connect indisponible", source)
-                return Result.success()
-            }
-
-            val client = HealthConnectClient.getOrCreate(applicationContext)
-            val granted = client.permissionController.getGrantedPermissions()
-
-            if (!HealthPermissions.records.all { it in granted }) {
-                SyncState.recordFailure(
-                    applicationContext,
-                    "Autorisations Santé Connect de lecture manquantes",
-                    source
-                )
-                return Result.success()
-            }
-
-            if (HealthPermissions.BACKGROUND !in granted) {
-                SyncState.recordFailure(
-                    applicationContext,
-                    "Lecture Santé Connect en arrière-plan non autorisée",
-                    source
-                )
-                return Result.success()
-            }
-
-            val repo = HealthRepository(applicationContext)
-            val summary = repo.load(client)
-            val drive = DriveBridge(applicationContext)
-            val driveWritten = if (drive.hasFolder()) {
-                drive.writeAll(summary, repo.localHistoryJson())
-            } else false
-
-            if (drive.hasFolder() && !driveWritten) {
-                SyncState.recordFailure(
-                    applicationContext,
-                    "Écriture Drive impossible",
-                    source
-                )
-                return Result.retry()
-            }
-
-            SyncState.recordSuccess(applicationContext, driveWritten, source)
-            applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-                .edit()
-                .putLong("last_worker_finished_at", System.currentTimeMillis())
-                .putString("last_worker_result", "success")
-                .apply()
-            BackgroundSyncScheduler.scheduleNextAlarm(applicationContext)
-            NotificationHelper(applicationContext).maybeNotify(summary)
-            Result.success()
-        } catch (_: SecurityException) {
-            applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-                .edit()
-                .putLong("last_worker_finished_at", System.currentTimeMillis())
-                .putString("last_worker_result", "security_error")
-                .apply()
-            SyncState.recordFailure(
-                applicationContext,
-                "Accès Santé Connect refusé en arrière-plan",
-                source
-            )
-            Result.success()
-        } catch (e: Exception) {
-            applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-                .edit()
-                .putLong("last_worker_finished_at", System.currentTimeMillis())
-                .putString("last_worker_result", "error")
-                .apply()
-            SyncState.recordFailure(
-                applicationContext,
-                e.message ?: e.javaClass.simpleName,
-                source
-            )
-            Result.retry()
-        }
+        val ok = HealthSyncRunner.run(applicationContext, "workmanager")
+        BackgroundSyncScheduler.scheduleNextAlarm(applicationContext)
+        return if (ok) Result.success() else Result.retry()
     }
 }
