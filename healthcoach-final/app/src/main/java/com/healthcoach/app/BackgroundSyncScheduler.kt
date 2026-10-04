@@ -6,25 +6,28 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import android.os.SystemClock
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 /**
- * Synchronisation automatique :
- * - AlarmManager exact toutes les N minutes quand Android l'autorise ;
- * - WorkManager périodique conservé comme filet de sécurité ;
- * - rattrapage à l'ouverture de l'app.
+ * Synchronisation arrière-plan renforcée :
+ * - WorkManager périodique = filet de sécurité Android ;
+ * - AlarmManager = réveil à l'intervalle demandé ;
+ * - alarme exacte si l'utilisateur a accordé l'accès spécial ;
+ * - travail expedited à chaque réveil ;
+ * - rattrapage à la réouverture si nécessaire.
  */
 object BackgroundSyncScheduler {
     private const val PERIODIC_NAME = "healthcoach_background_sync"
     private const val ALARM_WORK_NAME = "healthcoach_alarm_sync"
     private const val ALARM_REQUEST_CODE = 9201
-    private const val ACTION_INTERVAL_SYNC = "com.healthcoach.app.INTERVAL_SYNC"
 
     fun apply(context: Context) {
         val minutes = intervalMinutes(context)
@@ -41,27 +44,22 @@ object BackgroundSyncScheduler {
         )
 
         scheduleNextAlarm(context, minutes)
+
+        if (shouldCatchUp(context)) {
+            enqueueImmediate(context)
+        }
     }
 
-    fun enqueueImmediate(context: Context, source: String = "alarm") {
-        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("last_alarm_fired_at", System.currentTimeMillis())
-            .putString("last_alarm_source", source)
-            .apply()
+    fun enqueueImmediate(context: Context) {
+        val request = OneTimeWorkRequestBuilder<SyncWorker>()
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .build()
 
-        val request = OneTimeWorkRequestBuilder<SyncWorker>().build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             ALARM_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
             request
         )
-    }
-
-    fun canScheduleExact(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
-        val alarmManager = context.getSystemService(AlarmManager::class.java)
-        return alarmManager.canScheduleExactAlarms()
     }
 
     fun scheduleNextAlarm(
@@ -73,7 +71,7 @@ object BackgroundSyncScheduler {
             context,
             ALARM_REQUEST_CODE,
             Intent(context, IntervalSyncReceiver::class.java)
-                .setAction(ACTION_INTERVAL_SYNC),
+                .setAction("com.healthcoach.app.INTERVAL_SYNC"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -81,7 +79,7 @@ object BackgroundSyncScheduler {
 
         val delayMs = TimeUnit.MINUTES.toMillis(minutes.toLong())
         val triggerAt = SystemClock.elapsedRealtime() + delayMs
-        val exact = canScheduleExact(context)
+        val exact = exactAlarmAllowed(context)
 
         if (exact) {
             alarmManager.setExactAndAllowWhileIdle(
@@ -100,8 +98,19 @@ object BackgroundSyncScheduler {
         context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
             .edit()
             .putLong("next_interval_alarm_at", System.currentTimeMillis() + delayMs)
-            .putString("alarm_mode", if (exact) "exact" else "inexact")
+            .putBoolean("last_alarm_was_exact", exact)
             .apply()
+    }
+
+    fun exactAlarmAllowed(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        return context.getSystemService(AlarmManager::class.java)
+            .canScheduleExactAlarms()
+    }
+
+    fun batteryOptimizationIgnored(context: Context): Boolean {
+        val pm = context.getSystemService(PowerManager::class.java)
+        return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
 
     fun shouldCatchUp(context: Context): Boolean {
@@ -113,7 +122,7 @@ object BackgroundSyncScheduler {
         return System.currentTimeMillis() - lastDrive > intervalMs + graceMs
     }
 
-    private fun intervalMinutes(context: Context): Int =
+    fun intervalMinutes(context: Context): Int =
         context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
             .getInt("sync_minutes", 60)
             .coerceIn(15, 240)
@@ -121,7 +130,7 @@ object BackgroundSyncScheduler {
 
 class IntervalSyncReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        BackgroundSyncScheduler.enqueueImmediate(context, "alarm")
+        BackgroundSyncScheduler.enqueueImmediate(context)
         BackgroundSyncScheduler.scheduleNextAlarm(context)
     }
 }
