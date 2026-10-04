@@ -2,9 +2,13 @@ package com.healthcoach.app
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 object HealthSyncRunner {
-    suspend fun run(context: Context, source: String): Boolean {
+    private val mutex = Mutex()
+
+    suspend fun run(context: Context, source: String): Boolean = mutex.withLock {
         SyncState.recordAttempt(context, source)
         context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
             .edit()
