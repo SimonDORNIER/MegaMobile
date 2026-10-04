@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
         PermissionController.createRequestPermissionResultContract()
     ) {
         refreshSetupStatus()
-        startContinuousSyncService()
+        scheduleBackgroundSync()
         syncNow()
     }
 
@@ -97,7 +97,6 @@ class MainActivity : ComponentActivity() {
                         healthPermissionLauncher.launch(dataPermissions)
                     } else {
                         refreshSetupStatus()
-                        startContinuousSyncService()
                     }
                 }
             }
@@ -119,39 +118,13 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         scheduleBackgroundSync()
         refreshSetupStatus()
-        startContinuousSyncService()
+        requestReliableBackgroundPermissionOnce()
         scope.launch {
             val updating = UpdateManager.checkOnLaunch(this@MainActivity) { message ->
                 setStatus(message)
             }
             if (!updating && client != null && BackgroundSyncScheduler.shouldCatchUp(this@MainActivity)) {
                 syncNow()
-            }
-        }
-    }
-
-    private fun startContinuousSyncService() {
-        val hc = client ?: return
-
-        scope.launch {
-            val granted = runCatching {
-                hc.permissionController.getGrantedPermissions()
-            }.getOrDefault(emptySet())
-
-            if (HealthPermissions.records.all { it in granted } &&
-                HealthPermissions.BACKGROUND in granted
-            ) {
-                runCatching {
-                    ContextCompat.startForegroundService(
-                        this@MainActivity,
-                        Intent(this@MainActivity, HealthSyncService::class.java)
-                    )
-                }.onFailure {
-                    setStatus(
-                        "Impossible de démarrer la synchro continue : " +
-                            (it.message ?: it.javaClass.simpleName)
-                    )
-                }
             }
         }
     }
@@ -179,7 +152,7 @@ class MainActivity : ComponentActivity() {
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
             setPadding(0, dp(2), 0, dp(4))
         })
-        root.addView(text("v2.2.0 • synchronisation continue", 12.5f, false, Color.rgb(138,180,248)).apply {
+        root.addView(text("v2.2.1 • synchro automatique renforcée", 12.5f, false, Color.rgb(138,180,248)).apply {
             setPadding(0, 0, 0, dp(10))
         })
 
@@ -317,18 +290,14 @@ class MainActivity : ComponentActivity() {
                 driveText + "\n" +
                 notifText + "\n" +
                 "🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
-                "\n" + (if (
-                    System.currentTimeMillis() -
-                        prefs.getLong("foreground_service_alive_at", 0L) <
-                        java.util.concurrent.TimeUnit.MINUTES.toMillis(
-                            (prefs.getInt("sync_minutes", 60).coerceIn(15, 240) + 2).toLong()
-                        )
-                ) "✅ Service continu actif"
-                else "⚠️ Service continu à relancer") +
+                "\n" + (if (BackgroundSyncScheduler.canScheduleExact(this@MainActivity))
+                    "✅ Alarmes exactes autorisées"
+                else
+                    "⚠️ Alarmes exactes non autorisées") +
                 "\n" + (if (BackgroundSyncScheduler.batteryOptimizationIgnored(this@MainActivity))
                     "✅ Batterie : HealthCoach sans restriction"
                 else
-                    "⚠️ Batterie : Android peut encore limiter le service") +
+                    "⚠️ Batterie : Android peut retarder la synchro") +
                 (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
                 "\n✅ Dernière synchro Drive : " + formatClock(state.lastDriveSuccessAt) +
                 "\n⏰ Dernière alarme : " + formatClock(prefs.getLong("last_alarm_fired_at", 0L)) +
@@ -363,50 +332,34 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun ensureReliableServiceRunning() {
-        val hc = client ?: return
-        scope.launch {
-            val granted = runCatching {
-                hc.permissionController.getGrantedPermissions()
-            }.getOrDefault(emptySet())
-
-            val healthReady =
-                HealthPermissions.records.all { it in granted } &&
-                HealthPermissions.BACKGROUND in granted
-
-            if (healthReady &&
-                BackgroundSyncScheduler.canScheduleExact(this@MainActivity) &&
-                BackgroundSyncScheduler.batteryOptimizationIgnored(this@MainActivity)
-            ) {
-                BackgroundSyncScheduler.startReliableService(this@MainActivity)
-                refreshSetupStatus()
-            }
-        }
-    }
-
     private fun requestReliableBackgroundPermissionOnce() {
         val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             !BackgroundSyncScheduler.canScheduleExact(this)
         ) {
-            if (!prefs.getBoolean("exact_alarm_prompted_v212", false)) {
-                prefs.edit().putBoolean("exact_alarm_prompted_v212", true).apply()
+            if (!prefs.getBoolean("exact_alarm_prompted_v221", false)) {
+                prefs.edit().putBoolean("exact_alarm_prompted_v221", true).apply()
                 requestExactAlarmPermission()
             }
             return
         }
 
         if (!BackgroundSyncScheduler.batteryOptimizationIgnored(this) &&
-            !prefs.getBoolean("battery_prompted_v212", false)
+            !prefs.getBoolean("battery_prompted_v221", false)
         ) {
-            prefs.edit().putBoolean("battery_prompted_v212", true).apply()
+            prefs.edit().putBoolean("battery_prompted_v221", true).apply()
             requestBatteryOptimizationExemption()
         }
     }
 
     private fun requestReliableBackgroundSync() {
-        startContinuousSyncService()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !BackgroundSyncScheduler.canScheduleExact(this)
+        ) {
+            requestExactAlarmPermission()
+            return
+        }
 
         if (!BackgroundSyncScheduler.batteryOptimizationIgnored(this)) {
             requestBatteryOptimizationExemption()
@@ -414,8 +367,9 @@ class MainActivity : ComponentActivity() {
         }
 
         scheduleBackgroundSync()
+        BackgroundSyncScheduler.enqueueImmediate(this)
         refreshSetupStatus()
-        setStatus("Synchronisation continue activée.")
+        setStatus("Synchronisation automatique fiabilisée.")
     }
 
     private fun requestExactAlarmPermission() {
@@ -447,8 +401,9 @@ class MainActivity : ComponentActivity() {
     private fun requestBatteryOptimizationExemption() {
         if (BackgroundSyncScheduler.batteryOptimizationIgnored(this)) {
             scheduleBackgroundSync()
+            BackgroundSyncScheduler.enqueueImmediate(this)
             refreshSetupStatus()
-            setStatus("HealthCoach est déjà autorisé à fonctionner sans restriction.")
+            setStatus("HealthCoach est autorisé à fonctionner sans restriction.")
             return
         }
 
