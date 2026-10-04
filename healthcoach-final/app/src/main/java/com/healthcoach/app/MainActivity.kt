@@ -111,13 +111,14 @@ class MainActivity : ComponentActivity() {
 
         scheduleBackgroundSync()
         FixedTimeSyncScheduler.apply(this)
-        requestExactAlarmPermissionOnce()
+        requestReliableBackgroundPermissionOnce()
     }
 
     override fun onResume() {
         super.onResume()
         scheduleBackgroundSync()
         refreshSetupStatus()
+        requestReliableBackgroundPermissionOnce()
         scope.launch {
             val updating = UpdateManager.checkOnLaunch(this@MainActivity) { message ->
                 setStatus(message)
@@ -171,8 +172,8 @@ class MainActivity : ComponentActivity() {
         setup.addView(button("Autorisations Santé Connect") {
             checkHealthPermissionsFromButton()
         })
-        setup.addView(button("Autoriser la synchro exacte") {
-            requestExactAlarmPermission()
+        setup.addView(button("Fiabiliser la synchro automatique") {
+            requestReliableBackgroundSync()
         })
         setup.addView(button("Vérifier la mise à jour") {
             checkForAppUpdate()
@@ -290,9 +291,13 @@ class MainActivity : ComponentActivity() {
                 notifText + "\n" +
                 "🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
                 "\n" + (if (BackgroundSyncScheduler.canScheduleExact(this@MainActivity))
-                    "✅ Synchro exacte autorisée"
+                    "✅ Alarmes exactes autorisées"
                 else
-                    "⚠️ Synchro exacte non autorisée") +
+                    "⚠️ Alarmes exactes non autorisées") +
+                "\n" + (if (BackgroundSyncScheduler.batteryOptimizationIgnored(this@MainActivity))
+                    "✅ Batterie : HealthCoach sans restriction"
+                else
+                    "⚠️ Batterie : Android peut retarder HealthCoach") +
                 (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
                 "\n✅ Dernière synchro Drive : " + formatClock(state.lastDriveSuccessAt) +
                 "\n⏰ Dernière alarme : " + formatClock(prefs.getLong("last_alarm_fired_at", 0L)) +
@@ -327,24 +332,50 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestExactAlarmPermissionOnce() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        if (BackgroundSyncScheduler.canScheduleExact(this)) return
-
+    private fun requestReliableBackgroundPermissionOnce() {
         val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
-        if (prefs.getBoolean("exact_alarm_prompted_v212", false)) return
 
-        prefs.edit().putBoolean("exact_alarm_prompted_v212", true).apply()
-        requestExactAlarmPermission()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !BackgroundSyncScheduler.canScheduleExact(this)
+        ) {
+            if (!prefs.getBoolean("exact_alarm_prompted_v212", false)) {
+                prefs.edit().putBoolean("exact_alarm_prompted_v212", true).apply()
+                requestExactAlarmPermission()
+            }
+            return
+        }
+
+        if (!BackgroundSyncScheduler.batteryOptimizationIgnored(this) &&
+            !prefs.getBoolean("battery_prompted_v212", false)
+        ) {
+            prefs.edit().putBoolean("battery_prompted_v212", true).apply()
+            requestBatteryOptimizationExemption()
+        }
+    }
+
+    private fun requestReliableBackgroundSync() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !BackgroundSyncScheduler.canScheduleExact(this)
+        ) {
+            requestExactAlarmPermission()
+            return
+        }
+
+        if (!BackgroundSyncScheduler.batteryOptimizationIgnored(this)) {
+            requestBatteryOptimizationExemption()
+            return
+        }
+
+        scheduleBackgroundSync()
+        refreshSetupStatus()
+        setStatus("Synchronisation automatique renforcée activée.")
     }
 
     private fun requestExactAlarmPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             BackgroundSyncScheduler.canScheduleExact(this)
         ) {
-            setStatus("La synchronisation exacte est déjà autorisée.")
-            scheduleBackgroundSync()
-            refreshSetupStatus()
+            requestReliableBackgroundSync()
             return
         }
 
@@ -363,6 +394,27 @@ class MainActivity : ComponentActivity() {
                     Uri.parse("package:" + packageName)
                 )
             )
+        }
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (BackgroundSyncScheduler.batteryOptimizationIgnored(this)) {
+            scheduleBackgroundSync()
+            refreshSetupStatus()
+            setStatus("HealthCoach est déjà autorisé à fonctionner sans restriction.")
+            return
+        }
+
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + packageName)
+                )
+            )
+            setStatus("Autorise HealthCoach à fonctionner sans restriction en arrière-plan.")
+        } catch (_: Exception) {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }
     }
 
