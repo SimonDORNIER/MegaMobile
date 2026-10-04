@@ -164,10 +164,9 @@ class IntervalSyncReceiver : BroadcastReceiver() {
             .putLong("last_alarm_fired_at", System.currentTimeMillis())
             .apply()
 
+        // launchAlarmSync utilise WorkManager en secours uniquement si Android
+        // refuse le service de premier plan.
         BackgroundSyncScheduler.launchAlarmSync(context)
-
-        // WorkManager en secours, même si le service démarre.
-        BackgroundSyncScheduler.enqueueImmediate(context)
         BackgroundSyncScheduler.scheduleNextAlarm(context)
     }
 }
