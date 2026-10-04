@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
         PermissionController.createRequestPermissionResultContract()
     ) {
         refreshSetupStatus()
+        startContinuousSyncService()
         syncNow()
     }
 
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
                         healthPermissionLauncher.launch(dataPermissions)
                     } else {
                         refreshSetupStatus()
+                        startContinuousSyncService()
                     }
                 }
             }
@@ -111,20 +113,45 @@ class MainActivity : ComponentActivity() {
 
         scheduleBackgroundSync()
         FixedTimeSyncScheduler.apply(this)
-        requestReliableBackgroundPermissionOnce()
     }
 
     override fun onResume() {
         super.onResume()
         scheduleBackgroundSync()
         refreshSetupStatus()
-        requestReliableBackgroundPermissionOnce()
+        startContinuousSyncService()
         scope.launch {
             val updating = UpdateManager.checkOnLaunch(this@MainActivity) { message ->
                 setStatus(message)
             }
             if (!updating && client != null && BackgroundSyncScheduler.shouldCatchUp(this@MainActivity)) {
                 syncNow()
+            }
+        }
+    }
+
+    private fun startContinuousSyncService() {
+        val hc = client ?: return
+
+        scope.launch {
+            val granted = runCatching {
+                hc.permissionController.getGrantedPermissions()
+            }.getOrDefault(emptySet())
+
+            if (HealthPermissions.records.all { it in granted } &&
+                HealthPermissions.BACKGROUND in granted
+            ) {
+                runCatching {
+                    ContextCompat.startForegroundService(
+                        this@MainActivity,
+                        Intent(this@MainActivity, HealthSyncService::class.java)
+                    )
+                }.onFailure {
+                    setStatus(
+                        "Impossible de démarrer la synchro continue : " +
+                            (it.message ?: it.javaClass.simpleName)
+                    )
+                }
             }
         }
     }
@@ -152,7 +179,7 @@ class MainActivity : ComponentActivity() {
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
             setPadding(0, dp(2), 0, dp(4))
         })
-        root.addView(text("v2.1.2 • synchro automatique renforcée", 12.5f, false, Color.rgb(138,180,248)).apply {
+        root.addView(text("v2.2.0 • synchronisation continue", 12.5f, false, Color.rgb(138,180,248)).apply {
             setPadding(0, 0, 0, dp(10))
         })
 
@@ -290,14 +317,18 @@ class MainActivity : ComponentActivity() {
                 driveText + "\n" +
                 notifText + "\n" +
                 "🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
-                "\n" + (if (BackgroundSyncScheduler.canScheduleExact(this@MainActivity))
-                    "✅ Alarmes exactes autorisées"
-                else
-                    "⚠️ Alarmes exactes non autorisées") +
+                "\n" + (if (
+                    System.currentTimeMillis() -
+                        prefs.getLong("foreground_service_alive_at", 0L) <
+                        java.util.concurrent.TimeUnit.MINUTES.toMillis(
+                            (prefs.getInt("sync_minutes", 60).coerceIn(15, 240) + 2).toLong()
+                        )
+                ) "✅ Service continu actif"
+                else "⚠️ Service continu à relancer") +
                 "\n" + (if (BackgroundSyncScheduler.batteryOptimizationIgnored(this@MainActivity))
                     "✅ Batterie : HealthCoach sans restriction"
                 else
-                    "⚠️ Batterie : Android peut retarder HealthCoach") +
+                    "⚠️ Batterie : Android peut encore limiter le service") +
                 (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
                 "\n✅ Dernière synchro Drive : " + formatClock(state.lastDriveSuccessAt) +
                 "\n⏰ Dernière alarme : " + formatClock(prefs.getLong("last_alarm_fired_at", 0L)) +
@@ -354,12 +385,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestReliableBackgroundSync() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !BackgroundSyncScheduler.canScheduleExact(this)
-        ) {
-            requestExactAlarmPermission()
-            return
-        }
+        startContinuousSyncService()
 
         if (!BackgroundSyncScheduler.batteryOptimizationIgnored(this)) {
             requestBatteryOptimizationExemption()
@@ -368,7 +394,7 @@ class MainActivity : ComponentActivity() {
 
         scheduleBackgroundSync()
         refreshSetupStatus()
-        setStatus("Synchronisation automatique renforcée activée.")
+        setStatus("Synchronisation continue activée.")
     }
 
     private fun requestExactAlarmPermission() {
@@ -472,6 +498,9 @@ class MainActivity : ComponentActivity() {
                         driveWritten = driveOk,
                         source = "foreground"
                     )
+                }
+                if (driveOk) {
+                    withContext(Dispatchers.IO) { drive.writeSyncDiagnostics() }
                 }
                 BackgroundSyncScheduler.scheduleNextAlarm(this@MainActivity)
                 refreshSetupStatus()
