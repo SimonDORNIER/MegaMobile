@@ -1,6 +1,11 @@
 name: HealthCoach Final APK
 on:
   workflow_dispatch:
+  push:
+    branches: [ healthcoach-v200-sync ]
+    paths:
+      - 'healthcoach-final/**'
+      - '.github/workflows/healthcoach-final-build.yml'
   pull_request:
     branches: [ main ]
     paths:
@@ -12,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
