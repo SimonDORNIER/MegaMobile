@@ -28,6 +28,7 @@ object BackgroundSyncScheduler {
     private const val PERIODIC_NAME = "healthcoach_background_sync"
     private const val IMMEDIATE_WORK_NAME = "healthcoach_immediate_sync"
     private const val ALARM_REQUEST_CODE = 9201
+    private const val TEST_ALARM_REQUEST_CODE = 9202
 
     fun apply(context: Context) {
         val minutes = intervalMinutes(context)
@@ -135,6 +136,41 @@ object BackgroundSyncScheduler {
             .apply()
     }
 
+    fun scheduleTestAlarm(context: Context, delayMinutes: Int = 1) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val pending = PendingIntent.getBroadcast(
+            context,
+            TEST_ALARM_REQUEST_CODE,
+            Intent(context, IntervalSyncReceiver::class.java)
+                .setAction("com.healthcoach.app.TEST_INTERVAL_SYNC"),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        alarmManager.cancel(pending)
+
+        val delayMs = TimeUnit.MINUTES.toMillis(delayMinutes.toLong())
+        val triggerAt = SystemClock.elapsedRealtime() + delayMs
+
+        if (canScheduleExact(context)) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAt,
+                pending
+            )
+        } else {
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAt,
+                pending
+            )
+        }
+
+        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("test_alarm_scheduled_at", System.currentTimeMillis() + delayMs)
+            .apply()
+    }
+
     fun canScheduleExact(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         return context.getSystemService(AlarmManager::class.java)
@@ -163,13 +199,21 @@ object BackgroundSyncScheduler {
 
 class IntervalSyncReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
+        val now = System.currentTimeMillis()
+        val isTest = intent?.action == "com.healthcoach.app.TEST_INTERVAL_SYNC"
+
         context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
             .edit()
-            .putLong("last_alarm_fired_at", System.currentTimeMillis())
-            .apply()
+            .putLong("last_alarm_fired_at", now)
+            .apply {
+                if (isTest) {
+                    context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+                        .edit()
+                        .putLong("last_test_alarm_fired_at", now)
+                        .apply()
+                }
+            }
 
-        // launchAlarmSync utilise WorkManager en secours uniquement si Android
-        // refuse le service de premier plan.
         BackgroundSyncScheduler.launchAlarmSync(context)
         BackgroundSyncScheduler.scheduleNextAlarm(context)
     }
