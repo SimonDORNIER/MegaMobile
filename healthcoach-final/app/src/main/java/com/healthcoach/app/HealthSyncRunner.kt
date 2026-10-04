@@ -9,6 +9,21 @@ object HealthSyncRunner {
     private val mutex = Mutex()
 
     suspend fun run(context: Context, source: String): Boolean = mutex.withLock {
+        val previous = SyncState.read(context)
+        val isAutomatic = source != "foreground"
+        if (isAutomatic &&
+            previous.lastDriveSuccessAt > 0L &&
+            System.currentTimeMillis() - previous.lastDriveSuccessAt < 120_000L
+        ) {
+            context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_worker_started_at", System.currentTimeMillis())
+                .putLong("last_worker_finished_at", System.currentTimeMillis())
+                .putString("last_worker_result", "skipped_recent_success")
+                .apply()
+            return@withLock true
+        }
+
         SyncState.recordAttempt(context, source)
         context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
             .edit()
