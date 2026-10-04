@@ -3,6 +3,8 @@ package com.healthcoach.app
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -109,10 +111,12 @@ class MainActivity : ComponentActivity() {
 
         scheduleBackgroundSync()
         FixedTimeSyncScheduler.apply(this)
+        requestExactAlarmPermissionOnce()
     }
 
     override fun onResume() {
         super.onResume()
+        scheduleBackgroundSync()
         refreshSetupStatus()
         scope.launch {
             val updating = UpdateManager.checkOnLaunch(this@MainActivity) { message ->
@@ -147,7 +151,7 @@ class MainActivity : ComponentActivity() {
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
             setPadding(0, dp(2), 0, dp(4))
         })
-        root.addView(text("v2.1.1 • mise à jour automatique reçue", 12.5f, false, Color.rgb(138,180,248)).apply {
+        root.addView(text("v2.1.2 • synchro automatique renforcée", 12.5f, false, Color.rgb(138,180,248)).apply {
             setPadding(0, 0, 0, dp(10))
         })
 
@@ -166,6 +170,9 @@ class MainActivity : ComponentActivity() {
         setup.addView(setupStatus)
         setup.addView(button("Autorisations Santé Connect") {
             checkHealthPermissionsFromButton()
+        })
+        setup.addView(button("Autoriser la synchro exacte") {
+            requestExactAlarmPermission()
         })
         setup.addView(button("Vérifier la mise à jour") {
             checkForAppUpdate()
@@ -282,8 +289,14 @@ class MainActivity : ComponentActivity() {
                 driveText + "\n" +
                 notifText + "\n" +
                 "🔄 Synchro : " + prefs.getInt("sync_minutes", 60) + " min." +
+                "\n" + (if (BackgroundSyncScheduler.canScheduleExact(this@MainActivity))
+                    "✅ Synchro exacte autorisée"
+                else
+                    "⚠️ Synchro exacte non autorisée") +
                 (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
                 "\n✅ Dernière synchro Drive : " + formatClock(state.lastDriveSuccessAt) +
+                "\n⏰ Dernière alarme : " + formatClock(prefs.getLong("last_alarm_fired_at", 0L)) +
+                "\n⚙️ Dernier worker : " + formatClock(prefs.getLong("last_worker_started_at", 0L)) +
                 "\n🔎 Dernière tentative : " + formatClock(state.lastAttemptAt) +
                 (state.lastSource?.let { " (" + it + ")" } ?: "") +
                 "\n⏱️ Prochaine relance : ~" + formatClock(nextAlarm) +
@@ -311,6 +324,45 @@ class MainActivity : ComponentActivity() {
             }
 
             render(healthText)
+        }
+    }
+
+    private fun requestExactAlarmPermissionOnce() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        if (BackgroundSyncScheduler.canScheduleExact(this)) return
+
+        val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
+        if (prefs.getBoolean("exact_alarm_prompted_v212", false)) return
+
+        prefs.edit().putBoolean("exact_alarm_prompted_v212", true).apply()
+        requestExactAlarmPermission()
+    }
+
+    private fun requestExactAlarmPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            BackgroundSyncScheduler.canScheduleExact(this)
+        ) {
+            setStatus("La synchronisation exacte est déjà autorisée.")
+            scheduleBackgroundSync()
+            refreshSetupStatus()
+            return
+        }
+
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:" + packageName)
+                )
+            )
+            setStatus("Active « Alarmes et rappels », puis reviens dans HealthCoach.")
+        } catch (_: Exception) {
+            startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + packageName)
+                )
+            )
         }
     }
 
