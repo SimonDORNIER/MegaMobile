@@ -35,6 +35,11 @@ class HealthSyncService : Service() {
             buildNotification("Synchronisation en cours…")
         )
 
+        getSharedPreferences("healthcoach", MODE_PRIVATE)
+            .edit()
+            .putLong("foreground_service_alive_at", System.currentTimeMillis())
+            .apply()
+
         if (!running) {
             running = true
             scope.launch {
