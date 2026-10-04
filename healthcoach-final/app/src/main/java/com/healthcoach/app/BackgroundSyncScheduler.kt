@@ -202,17 +202,14 @@ class IntervalSyncReceiver : BroadcastReceiver() {
         val now = System.currentTimeMillis()
         val isTest = intent?.action == "com.healthcoach.app.TEST_INTERVAL_SYNC"
 
-        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+        val editor = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
             .edit()
             .putLong("last_alarm_fired_at", now)
-            .apply {
-                if (isTest) {
-                    context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-                        .edit()
-                        .putLong("last_test_alarm_fired_at", now)
-                        .apply()
-                }
-            }
+
+        if (isTest) {
+            editor.putLong("last_test_alarm_fired_at", now)
+        }
+        editor.apply()
 
         BackgroundSyncScheduler.launchAlarmSync(context)
         BackgroundSyncScheduler.scheduleNextAlarm(context)
