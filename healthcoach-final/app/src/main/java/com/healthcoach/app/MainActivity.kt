@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity() {
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
             setPadding(0, dp(2), 0, dp(4))
         })
-        root.addView(text("v2.2.1 • synchro automatique renforcée", 12.5f, false, Color.rgb(138,180,248)).apply {
+        root.addView(text("v2.2.2 • synchro automatique redondante", 12.5f, false, Color.rgb(138,180,248)).apply {
             setPadding(0, 0, 0, dp(10))
         })
 
@@ -301,10 +301,14 @@ class MainActivity : ComponentActivity() {
                 (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
                 "\n✅ Dernière synchro Drive : " + formatClock(state.lastDriveSuccessAt) +
                 "\n⏰ Dernière alarme : " + formatClock(prefs.getLong("last_alarm_fired_at", 0L)) +
+                "\n🚀 Dernier service : " + formatClock(prefs.getLong("last_sync_service_started_at", 0L)) +
                 "\n⚙️ Dernier worker : " + formatClock(prefs.getLong("last_worker_started_at", 0L)) +
                 "\n🔎 Dernière tentative : " + formatClock(state.lastAttemptAt) +
                 (state.lastSource?.let { " (" + it + ")" } ?: "") +
                 "\n⏱️ Prochaine relance : ~" + formatClock(nextAlarm) +
+                (prefs.getString("foreground_service_start_error", null)?.let {
+                    "\n⚠️ Service Android : " + it
+                } ?: "") +
                 (state.lastError?.let { "\n⚠️ Dernière erreur : " + it } ?: "")
         }
 
