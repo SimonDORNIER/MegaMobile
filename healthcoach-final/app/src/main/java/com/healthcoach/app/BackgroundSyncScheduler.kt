@@ -138,6 +138,39 @@ object BackgroundSyncScheduler {
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
 
+    fun startReliableService(context: Context) {
+        val prefs = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("reliable_sync_enabled", true)) return
+
+        try {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, HealthSyncService::class.java)
+            )
+            prefs.edit()
+                .remove("foreground_service_start_error")
+                .apply()
+        } catch (e: Exception) {
+            prefs.edit()
+                .putString(
+                    "foreground_service_start_error",
+                    e.message ?: e.javaClass.simpleName
+                )
+                .apply()
+        }
+    }
+
+    fun reliableServiceAlive(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+        val lastAlive = prefs.getLong("foreground_service_alive_at", 0L)
+        if (lastAlive <= 0L) return false
+
+        val maxAge = TimeUnit.MINUTES.toMillis(
+            (intervalMinutes(context) + 5).toLong()
+        )
+        return System.currentTimeMillis() - lastAlive <= maxAge
+    }
+
     fun shouldCatchUp(context: Context): Boolean {
         val lastDrive = SyncState.read(context).lastDriveSuccessAt
         if (lastDrive <= 0L) return true
