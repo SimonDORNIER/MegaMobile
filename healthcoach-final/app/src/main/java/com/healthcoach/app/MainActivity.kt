@@ -363,6 +363,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun ensureReliableServiceRunning() {
+        val hc = client ?: return
+        scope.launch {
+            val granted = runCatching {
+                hc.permissionController.getGrantedPermissions()
+            }.getOrDefault(emptySet())
+
+            val healthReady =
+                HealthPermissions.records.all { it in granted } &&
+                HealthPermissions.BACKGROUND in granted
+
+            if (healthReady &&
+                BackgroundSyncScheduler.canScheduleExact(this@MainActivity) &&
+                BackgroundSyncScheduler.batteryOptimizationIgnored(this@MainActivity)
+            ) {
+                BackgroundSyncScheduler.startReliableService(this@MainActivity)
+                refreshSetupStatus()
+            }
+        }
+    }
+
     private fun requestReliableBackgroundPermissionOnce() {
         val prefs = getSharedPreferences("healthcoach", MODE_PRIVATE)
 
