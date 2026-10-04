@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,20 +38,33 @@ class HealthSyncService : Service() {
         if (!running) {
             running = true
             scope.launch {
-                val source = intent?.getStringExtra(EXTRA_SOURCE) ?: "alarm-service"
-                val ok = HealthSyncRunner.run(this@HealthSyncService, source)
-
-                getSystemService(NotificationManager::class.java).notify(
-                    NOTIFICATION_ID,
-                    buildNotification(
-                        if (ok) "Synchronisation terminée"
-                        else "Synchronisation échouée • nouvelle tentative prévue"
+                val wakeLock = getSystemService(PowerManager::class.java)
+                    .newWakeLock(
+                        PowerManager.PARTIAL_WAKE_LOCK,
+                        "HealthCoach:AutomaticSync"
                     )
-                )
+                    .apply {
+                        setReferenceCounted(false)
+                        acquire(3 * 60 * 1000L)
+                    }
 
-                BackgroundSyncScheduler.scheduleNextAlarm(this@HealthSyncService)
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf(startId)
+                try {
+                    val source = intent?.getStringExtra(EXTRA_SOURCE) ?: "alarm-service"
+                    val ok = HealthSyncRunner.run(this@HealthSyncService, source)
+
+                    getSystemService(NotificationManager::class.java).notify(
+                        NOTIFICATION_ID,
+                        buildNotification(
+                            if (ok) "Synchronisation terminée"
+                            else "Synchronisation échouée • nouvelle tentative prévue"
+                        )
+                    )
+                } finally {
+                    if (wakeLock.isHeld) wakeLock.release()
+                    BackgroundSyncScheduler.scheduleNextAlarm(this@HealthSyncService)
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf(startId)
+                }
             }
         }
 
