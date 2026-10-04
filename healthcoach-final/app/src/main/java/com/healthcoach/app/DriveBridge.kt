@@ -95,8 +95,12 @@ class DriveBridge(private val context: Context) {
         val state = SyncState.read(context)
         val p = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
 
-        val json = JSONObject().apply {
-            put("schemaVersion", 1)
+        val status = readJson("healthcoach_status.json") ?: JSONObject().apply {
+            put("schemaVersion", 4)
+            put("connected", true)
+        }
+
+        status.put("sync", JSONObject().apply {
             put("generatedAt", java.time.Instant.now().toString())
             put("lastAttemptAt", state.lastAttemptAt)
             put("lastHealthSuccessAt", state.lastHealthSuccessAt)
@@ -104,14 +108,18 @@ class DriveBridge(private val context: Context) {
             put("lastSource", state.lastSource ?: JSONObject.NULL)
             put("lastError", state.lastError ?: JSONObject.NULL)
             put("lastAlarmFiredAt", p.getLong("last_alarm_fired_at", 0L))
+            put("lastServiceStartedAt", p.getLong("last_sync_service_started_at", 0L))
+            put("foregroundServiceAliveAt", p.getLong("foreground_service_alive_at", 0L))
             put("lastWorkerStartedAt", p.getLong("last_worker_started_at", 0L))
             put("lastWorkerFinishedAt", p.getLong("last_worker_finished_at", 0L))
             put("lastWorkerResult", p.getString("last_worker_result", null) ?: JSONObject.NULL)
-            put("foregroundServiceAliveAt", p.getLong("foreground_service_alive_at", 0L))
             put("nextIntervalAlarmAt", p.getLong("next_interval_alarm_at", 0L))
             put("syncMinutes", p.getInt("sync_minutes", 60))
-        }
-        return writeJson("healthcoach_sync.json", json)
+            put("exactAlarmAllowed", BackgroundSyncScheduler.canScheduleExact(context))
+            put("batteryOptimizationIgnored", BackgroundSyncScheduler.batteryOptimizationIgnored(context))
+        })
+
+        return writeJson("healthcoach_status.json", status)
     }
 
     fun writeAll(summary: HealthSummary, history: JSONObject): Boolean {
@@ -119,7 +127,7 @@ class DriveBridge(private val context: Context) {
         val historyOk = writeJson("healthcoach_history.json", history)
         val previousUpdate = readJson("healthcoach_status.json")?.optJSONObject("update")
         val status = JSONObject().apply {
-            put("schemaVersion", 3)
+            put("schemaVersion", 4)
             put("generatedAt", summary.generatedAt.toString())
             put("connected", true)
             put("recoveryScore", summary.recoveryScore)
