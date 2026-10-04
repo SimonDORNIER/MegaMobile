@@ -79,7 +79,7 @@ object BackgroundSyncScheduler {
 
         val delayMs = TimeUnit.MINUTES.toMillis(minutes.toLong())
         val triggerAt = SystemClock.elapsedRealtime() + delayMs
-        val exact = exactAlarmAllowed(context)
+        val exact = canScheduleExact(context)
 
         if (exact) {
             alarmManager.setExactAndAllowWhileIdle(
@@ -102,7 +102,7 @@ object BackgroundSyncScheduler {
             .apply()
     }
 
-    fun exactAlarmAllowed(context: Context): Boolean {
+    fun canScheduleExact(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         return context.getSystemService(AlarmManager::class.java)
             .canScheduleExactAlarms()
@@ -130,6 +130,11 @@ object BackgroundSyncScheduler {
 
 class IntervalSyncReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
+        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_alarm_fired_at", System.currentTimeMillis())
+            .apply()
+
         BackgroundSyncScheduler.enqueueImmediate(context)
         BackgroundSyncScheduler.scheduleNextAlarm(context)
     }
