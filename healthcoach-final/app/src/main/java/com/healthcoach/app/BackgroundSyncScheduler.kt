@@ -87,8 +87,12 @@ object BackgroundSyncScheduler {
                         ?: "démarrage refusé"
                 )
                 .apply()
-            enqueueImmediate(context)
         }
+
+        // Filet de sécurité systématique. Le runner ignore les doublons récents :
+        // si le service fonctionne, ce work devient quasi instantané ; sinon il
+        // assure la synchro lorsque le démarrage de service est bloqué par Android.
+        enqueueImmediate(context)
     }
 
     fun scheduleNextAlarm(
