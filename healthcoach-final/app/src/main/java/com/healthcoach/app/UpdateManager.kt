@@ -5,24 +5,28 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Base64
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
 data class UpdateDescriptor(
+    val versionCode: Long,
     val versionName: String,
-    val apkUrl: String,
+    val apkUrl: String?,
+    val chunks: List<String>,
+    val sha256: String?,
     val notes: String
 )
 
 object UpdateManager {
-    private const val RELEASES_URL =
-        "https://api.github.com/repos/SimonDORNIER/MegaMobile/releases?per_page=30"
+    private const val MANIFEST_URL =
+        "https://raw.githubusercontent.com/SimonDORNIER/MegaMobile/main/healthcoach/update.json"
 
     private var checkRunning = false
 
@@ -37,21 +41,21 @@ object UpdateManager {
             onStatus("Vérification des mises à jour…")
 
             val descriptor = withContext(Dispatchers.IO) {
-                fetchLatestHealthCoachRelease()
+                fetchDescriptor()
             } ?: run {
-                onStatus("Mise à jour : aucune release HealthCoach accessible.")
+                onStatus("Mise à jour : impossible de lire le serveur GitHub.")
                 return false
             }
 
-            val currentName = installedVersionName(activity)
-            if (compareVersions(descriptor.versionName, currentName) <= 0) {
-                onStatus("HealthCoach " + currentName + " est à jour.")
+            val currentVersion = installedVersionCode(activity)
+            if (descriptor.versionCode <= currentVersion) {
+                onStatus("HealthCoach " + installedVersionName(activity) + " est à jour.")
                 return false
             }
 
             onStatus(
                 "Mise à jour " + descriptor.versionName +
-                    " détectée (installée : " + currentName + ")."
+                    " détectée (installée : " + installedVersionName(activity) + ")."
             )
 
             val apk = File(
@@ -60,7 +64,13 @@ object UpdateManager {
             )
 
             val downloaded = withContext(Dispatchers.IO) {
-                downloadBinary(descriptor.apkUrl, apk)
+                when {
+                    descriptor.chunks.isNotEmpty() ->
+                        downloadChunkedApk(descriptor.chunks, apk)
+                    !descriptor.apkUrl.isNullOrBlank() ->
+                        downloadBinary(descriptor.apkUrl, apk)
+                    else -> false
+                }
             }
 
             if (!downloaded) {
@@ -68,9 +78,18 @@ object UpdateManager {
                 return true
             }
 
+            if (!descriptor.sha256.isNullOrBlank()) {
+                val digest = withContext(Dispatchers.IO) { sha256(apk) }
+                if (!digest.equals(descriptor.sha256, ignoreCase = true)) {
+                    apk.delete()
+                    onStatus("Mise à jour refusée : contrôle d'intégrité incorrect.")
+                    return true
+                }
+            }
+
             onStatus("Vérification de la signature…")
             val validation = withContext(Dispatchers.IO) {
-                validateApk(activity, apk)
+                validateApk(activity, apk, descriptor.versionCode)
             }
 
             if (validation != null) {
@@ -109,61 +128,72 @@ object UpdateManager {
             )
             return true
         } catch (e: Exception) {
-            onStatus("Mise à jour impossible : " + (e.message ?: e.javaClass.simpleName))
+            onStatus(
+                "Mise à jour impossible : " +
+                    (e.message ?: e.javaClass.simpleName)
+            )
             return false
         } finally {
             checkRunning = false
         }
     }
 
-    private fun fetchLatestHealthCoachRelease(): UpdateDescriptor? {
-        val text = fetchText(RELEASES_URL) ?: return null
-        val releases = JSONArray(text)
+    private fun fetchDescriptor(): UpdateDescriptor? {
+        val json = fetchText(MANIFEST_URL)?.let(::JSONObject) ?: return null
 
-        for (i in 0 until releases.length()) {
-            val release = releases.optJSONObject(i) ?: continue
-            if (release.optBoolean("draft", false) || release.optBoolean("prerelease", false)) continue
+        val versionCode = json.optLong("versionCode", 0L)
+        val versionName = json.optString("versionName", "")
+        val apkUrl = json.optString("apkUrl", "").takeIf { it.isNotBlank() }
+        val sha256 = json.optString("sha256", "").takeIf { it.isNotBlank() }
+        val notes = json.optString("notes", "")
 
-            val tag = release.optString("tag_name", "")
-            if (!tag.startsWith("healthcoach-v")) continue
-
-            val version = tag.removePrefix("healthcoach-v")
-            if (version.isBlank()) continue
-
-            val assets = release.optJSONArray("assets") ?: continue
-            for (j in 0 until assets.length()) {
-                val asset = assets.optJSONObject(j) ?: continue
-                val name = asset.optString("name", "")
-                val url = asset.optString("browser_download_url", "")
-                if (name.equals("HealthCoach-" + version + ".apk", ignoreCase = true) &&
-                    url.isNotBlank()
-                ) {
-                    return UpdateDescriptor(
-                        versionName = version,
-                        apkUrl = url,
-                        notes = release.optString("body", "")
-                    )
+        val chunksJson = json.optJSONArray("chunks")
+        val chunks = buildList {
+            if (chunksJson != null) {
+                for (i in 0 until chunksJson.length()) {
+                    chunksJson.optString(i, "").takeIf { it.isNotBlank() }?.let(::add)
                 }
             }
         }
-        return null
+
+        if (versionCode <= 0L || versionName.isBlank() ||
+            (apkUrl.isNullOrBlank() && chunks.isEmpty())
+        ) return null
+
+        return UpdateDescriptor(
+            versionCode = versionCode,
+            versionName = versionName,
+            apkUrl = apkUrl,
+            chunks = chunks,
+            sha256 = sha256,
+            notes = notes
+        )
     }
 
-    private fun compareVersions(a: String, b: String): Int {
-        val aa = a.split(".").map { it.toIntOrNull() ?: 0 }
-        val bb = b.split(".").map { it.toIntOrNull() ?: 0 }
-        val size = maxOf(aa.size, bb.size)
-        for (i in 0 until size) {
-            val av = aa.getOrElse(i) { 0 }
-            val bv = bb.getOrElse(i) { 0 }
-            if (av != bv) return av.compareTo(bv)
+    private fun downloadChunkedApk(urls: List<String>, destination: File): Boolean {
+        destination.parentFile?.mkdirs()
+        destination.outputStream().use { output ->
+            for ((index, url) in urls.withIndex()) {
+                val text = fetchText(url) ?: run {
+                    destination.delete()
+                    return false
+                }
+                val bytes = try {
+                    Base64.decode(text.trim(), Base64.DEFAULT)
+                } catch (_: Exception) {
+                    destination.delete()
+                    return false
+                }
+                output.write(bytes)
+                output.flush()
+            }
         }
-        return 0
+        return destination.length() > 100_000L
     }
 
     private fun downloadBinary(url: String, destination: File): Boolean {
         destination.parentFile?.mkdirs()
-        val connection = connection(url, 15_000, 60_000)
+        val connection = connection(url, 15_000, 45_000)
 
         return try {
             if (connection.responseCode !in 200..299) return false
@@ -205,11 +235,20 @@ object UpdateManager {
         useCaches = false
         setRequestProperty("Cache-Control", "no-cache")
         setRequestProperty("User-Agent", "HealthCoach-Android")
-        setRequestProperty("Accept", "application/vnd.github+json")
     }
 
-    private fun installedVersionName(activity: Activity): String =
-        activity.packageManager.getPackageInfo(activity.packageName, 0).versionName ?: "0.0.0"
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count <= 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
     @Suppress("DEPRECATION")
     private fun installedVersionCode(activity: Activity): Long {
@@ -221,10 +260,14 @@ object UpdateManager {
         }
     }
 
+    private fun installedVersionName(activity: Activity): String =
+        activity.packageManager.getPackageInfo(activity.packageName, 0).versionName ?: "?"
+
     @Suppress("DEPRECATION")
     private fun validateApk(
         activity: Activity,
-        apk: File
+        apk: File,
+        expectedVersionCode: Long
     ): String? {
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
@@ -245,8 +288,8 @@ object UpdateManager {
             archive.versionCode.toLong()
         }
 
-        if (archiveVersion <= installedVersionCode(activity)) {
-            return "version APK non supérieure à la version installée"
+        if (archiveVersion != expectedVersionCode) {
+            return "version APK différente du manifeste"
         }
 
         val installed = activity.packageManager.getPackageInfo(activity.packageName, flags)
