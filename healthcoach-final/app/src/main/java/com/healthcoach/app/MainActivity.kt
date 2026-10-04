@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity() {
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
             setPadding(0, dp(2), 0, dp(4))
         })
-        root.addView(text("v2.2.1 • synchro automatique renforcée", 12.5f, false, Color.rgb(138,180,248)).apply {
+        root.addView(text("v2.2.3 • synchro automatique fiable", 12.5f, false, Color.rgb(138,180,248)).apply {
             setPadding(0, 0, 0, dp(10))
         })
 
