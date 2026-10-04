@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity() {
         root.addView(text("Santé Connect + historique + pont ChatGPT", 15f, false, Color.rgb(174,184,199)).apply {
             setPadding(0, dp(2), 0, dp(4))
         })
-        root.addView(text("v2.2.2 • synchro automatique redondante", 12.5f, false, Color.rgb(138,180,248)).apply {
+        root.addView(text("v2.3.0 • synchro auto vérifiable", 12.5f, false, Color.rgb(138,180,248)).apply {
             setPadding(0, 0, 0, dp(10))
         })
 
@@ -174,6 +174,11 @@ class MainActivity : ComponentActivity() {
         })
         setup.addView(button("Fiabiliser la synchro automatique") {
             requestReliableBackgroundSync()
+        })
+        setup.addView(button("Tester la synchro auto dans 1 min") {
+            BackgroundSyncScheduler.scheduleTestAlarm(this, 1)
+            setStatus("Test programmé : ferme HealthCoach, synchro attendue dans ~1 minute.")
+            refreshSetupStatus()
         })
         setup.addView(button("Vérifier la mise à jour") {
             checkForAppUpdate()
@@ -301,6 +306,7 @@ class MainActivity : ComponentActivity() {
                 (fixed?.let { "\n🕒 Heures fixes : " + it } ?: "") +
                 "\n✅ Dernière synchro Drive : " + formatClock(state.lastDriveSuccessAt) +
                 "\n⏰ Dernière alarme : " + formatClock(prefs.getLong("last_alarm_fired_at", 0L)) +
+                "\n🧪 Dernière alarme test : " + formatClock(prefs.getLong("last_test_alarm_fired_at", 0L)) +
                 "\n🚀 Dernier service : " + formatClock(prefs.getLong("last_sync_service_started_at", 0L)) +
                 "\n⚙️ Dernier worker : " + formatClock(prefs.getLong("last_worker_started_at", 0L)) +
                 "\n🔎 Dernière tentative : " + formatClock(state.lastAttemptAt) +
