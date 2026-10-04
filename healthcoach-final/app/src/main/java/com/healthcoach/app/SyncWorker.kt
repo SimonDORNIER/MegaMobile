@@ -12,6 +12,10 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         val source = "background"
+        applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_worker_started_at", System.currentTimeMillis())
+            .apply()
         SyncState.recordAttempt(applicationContext, source)
 
         return try {
@@ -58,9 +62,20 @@ class SyncWorker(
             }
 
             SyncState.recordSuccess(applicationContext, driveWritten, source)
+            applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_worker_finished_at", System.currentTimeMillis())
+                .putString("last_worker_result", "success")
+                .apply()
+            BackgroundSyncScheduler.scheduleNextAlarm(applicationContext)
             NotificationHelper(applicationContext).maybeNotify(summary)
             Result.success()
         } catch (_: SecurityException) {
+            applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_worker_finished_at", System.currentTimeMillis())
+                .putString("last_worker_result", "security_error")
+                .apply()
             SyncState.recordFailure(
                 applicationContext,
                 "Accès Santé Connect refusé en arrière-plan",
@@ -68,6 +83,11 @@ class SyncWorker(
             )
             Result.success()
         } catch (e: Exception) {
+            applicationContext.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_worker_finished_at", System.currentTimeMillis())
+                .putString("last_worker_result", "error")
+                .apply()
             SyncState.recordFailure(
                 applicationContext,
                 e.message ?: e.javaClass.simpleName,
