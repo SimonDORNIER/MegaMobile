@@ -1,0 +1,9 @@
+name: Publish HealthCoach Final
+on:
+  workflow_dispatch:
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Signed HealthCoach releases are published through the project release process."
