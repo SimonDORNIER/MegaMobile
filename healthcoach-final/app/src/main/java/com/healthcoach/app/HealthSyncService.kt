@@ -7,8 +7,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,6 +22,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
+/**
+ * Mode fiable : service au premier plan silencieux.
+ * Android garde le processus prioritaire et HealthCoach déclenche une synchro
+ * toutes les X minutes, même lorsque l'écran est éteint.
+ */
 class HealthSyncService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loopJob: Job? = null
@@ -26,11 +34,12 @@ class HealthSyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Synchronisation active"))
+        startAsForeground("Synchronisation automatique active")
         startLoop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startAsForeground("Synchronisation automatique active")
         if (loopJob?.isActive != true) startLoop()
         return START_STICKY
     }
@@ -47,32 +56,52 @@ class HealthSyncService : Service() {
         loopJob?.cancel()
         loopJob = scope.launch {
             while (isActive) {
-                val started = System.currentTimeMillis()
                 getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
                     .edit()
-                    .putLong("foreground_service_alive_at", started)
+                    .putLong("foreground_service_alive_at", System.currentTimeMillis())
                     .apply()
 
-                val ok = HealthSyncRunner.run(
-                    this@HealthSyncService,
-                    "foreground-service"
-                )
+                val minutes = BackgroundSyncScheduler.intervalMinutes(this@HealthSyncService)
+                val intervalMs = TimeUnit.MINUTES.toMillis(minutes.toLong())
+                val lastDrive = SyncState.read(this@HealthSyncService).lastDriveSuccessAt
+                val due = lastDrive <= 0L ||
+                    System.currentTimeMillis() - lastDrive >= intervalMs - TimeUnit.MINUTES.toMillis(1)
+
+                val ok = if (due) {
+                    HealthSyncRunner.run(this@HealthSyncService, "foreground-service")
+                } else {
+                    true
+                }
 
                 val message = if (ok) {
-                    "Dernière synchro réussie"
+                    "Synchro auto active"
                 } else {
-                    "Synchronisation active • nouvelle tentative prévue"
+                    "Synchro active • nouvelle tentative prévue"
                 }
+
                 getSystemService(NotificationManager::class.java)
                     .notify(NOTIFICATION_ID, buildNotification(message))
 
-                val minutes = getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-                    .getInt("sync_minutes", 60)
-                    .coerceIn(15, 240)
+                BackgroundSyncScheduler.scheduleNextAlarm(this@HealthSyncService, minutes)
 
-                delay(TimeUnit.MINUTES.toMillis(minutes.toLong()))
+                delay(intervalMs)
             }
         }
+    }
+
+    private fun startAsForeground(text: String) {
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+        } else {
+            0
+        }
+
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            buildNotification(text),
+            type
+        )
     }
 
     private fun createChannel() {
@@ -97,8 +126,7 @@ class HealthSyncService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val minutes = getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
-            .getInt("sync_minutes", 60)
+        val minutes = BackgroundSyncScheduler.intervalMinutes(this)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
