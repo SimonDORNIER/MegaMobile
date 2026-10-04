@@ -2,7 +2,7 @@ name: HealthCoach Final APK
 on:
   workflow_dispatch:
   push:
-    branches: [ healthcoach-v200-sync ]
+    branches: [ healthcoach-v200-sync, healthcoach-v223-stable ]
     paths:
       - 'healthcoach-final/**'
       - '.github/workflows/healthcoach-final-build.yml'
