@@ -14,6 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.core.content.ContextCompat
 import java.util.concurrent.TimeUnit
 
 /**
@@ -48,6 +49,30 @@ object BackgroundSyncScheduler {
         if (shouldCatchUp(context)) {
             enqueueImmediate(context)
         }
+    }
+
+    fun startReliableService(context: Context) {
+        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("reliable_sync_enabled", true)
+            .apply()
+
+        try {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, HealthSyncService::class.java)
+            )
+        } catch (_: Exception) {
+            enqueueImmediate(context)
+        }
+    }
+
+    fun stopReliableService(context: Context) {
+        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("reliable_sync_enabled", false)
+            .apply()
+        context.stopService(Intent(context, HealthSyncService::class.java))
     }
 
     fun enqueueImmediate(context: Context) {
@@ -135,7 +160,14 @@ class IntervalSyncReceiver : BroadcastReceiver() {
             .putLong("last_alarm_fired_at", System.currentTimeMillis())
             .apply()
 
-        BackgroundSyncScheduler.enqueueImmediate(context)
+        val reliable = context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+            .getBoolean("reliable_sync_enabled", true)
+
+        if (reliable && BackgroundSyncScheduler.canScheduleExact(context)) {
+            BackgroundSyncScheduler.startReliableService(context)
+        } else {
+            BackgroundSyncScheduler.enqueueImmediate(context)
+        }
         BackgroundSyncScheduler.scheduleNextAlarm(context)
     }
 }
@@ -144,5 +176,12 @@ class HealthCoachBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         BackgroundSyncScheduler.apply(context)
         FixedTimeSyncScheduler.apply(context)
+
+        // Le service de premier plan ne peut pas toujours être relancé directement
+        // au démarrage par Android. L'alarme/WorkManager le relancera ensuite.
+        context.getSharedPreferences("healthcoach", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_boot_restore_at", System.currentTimeMillis())
+            .apply()
     }
 }
